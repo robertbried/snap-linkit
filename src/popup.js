@@ -17,8 +17,20 @@
   // Current settings state (fresh copy: never alias the defaults' blacklist array)
   let currentSettings = SnapLinkitDefaults();
 
-  // Track if settings have unsaved changes
-  let hasUnsavedChanges = false;
+  // Slider drags fire many input events; coalesce them so storage.sync's
+  // write-rate quota is not exhausted, and flush on change / pagehide.
+  let pendingSave = null;
+
+  function scheduleSave() {
+    clearTimeout(pendingSave);
+    pendingSave = setTimeout(saveNow, 300);
+  }
+
+  function saveNow() {
+    clearTimeout(pendingSave);
+    pendingSave = null;
+    saveSettings();
+  }
 
   // Initialize on DOM ready
   document.addEventListener('DOMContentLoaded', async () => {
@@ -27,12 +39,9 @@
     bindEvents();
     updateUI();
 
-    // Save any pending changes when popup closes
-    window.addEventListener('unload', () => {
-      if (hasUnsavedChanges) {
-        // Use sync storage directly (can't await in unload)
-        browserAPI.storage.sync.set(currentSettings);
-      }
+    // Flush a pending debounced save if the popup closes mid-drag
+    window.addEventListener('pagehide', () => {
+      if (pendingSave !== null) saveNow();
     });
   });
 
@@ -105,12 +114,9 @@
           const value = parseInt(e.target.value, 10);
           currentSettings[id] = value;
           valueDisplay.textContent = value;
-          hasUnsavedChanges = true;
+          scheduleSave();
         });
-        slider.addEventListener('change', () => {
-          saveSettings();
-          hasUnsavedChanges = false;
-        });
+        slider.addEventListener('change', saveNow);
       }
     });
 
@@ -128,7 +134,7 @@
       elements.addBlacklistBtn.addEventListener('click', addToBlacklist);
     }
     if (elements.blacklistInput) {
-      elements.blacklistInput.addEventListener('keypress', (e) => {
+      elements.blacklistInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') addToBlacklist();
       });
     }
