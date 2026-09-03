@@ -143,15 +143,7 @@
     } else if (!shouldRun && extensionActive) {
       extensionActive = false;
       detachEventListeners();
-      // Clean up any active UI
-      if (state.isSelecting) {
-        state.isSelecting = false;
-        stopAutoScroll();
-        if (lassoEl) lassoEl.style.display = 'none';
-        document.body.classList.remove('snaplinkit-selecting');
-      }
-      clearSelection();
-      hideMenu();
+      cancelSelection();
     }
   }
 
@@ -431,7 +423,6 @@
 
     setTimeout(() => {
       document.addEventListener('click', handleOutsideClick);
-      document.addEventListener('keydown', handleEscapeKey);
     }, 10);
   }
 
@@ -441,7 +432,6 @@
       menuEl = null;
     }
     document.removeEventListener('click', handleOutsideClick);
-    document.removeEventListener('keydown', handleEscapeKey);
   }
 
   function handleOutsideClick(e) {
@@ -449,13 +439,6 @@
       hideMenu();
       // Don't clear selection on outside click - allows Alt+drag to remove items
       // Selection will be cleared when user presses Escape or starts new selection without modifier
-    }
-  }
-
-  function handleEscapeKey(e) {
-    if (e.key === 'Escape') {
-      hideMenu();
-      clearSelection(); // Escape clears everything
     }
   }
 
@@ -634,6 +617,17 @@
     state.persistentSelection.clear();
   }
 
+  // Abort any in-progress drag, drop the selection and close the menu
+  function cancelSelection() {
+    state.isSelecting = false;
+    state.isDragging = false;
+    stopAutoScroll();
+    if (lassoEl) lassoEl.style.display = 'none';
+    document.body.classList.remove('snaplinkit-selecting');
+    clearSelection();
+    hideMenu();
+  }
+
   // ============================================
   // AUTO-SCROLL
   // ============================================
@@ -744,13 +738,10 @@
       state.isDragging = true;
       state.blockNextContextMenu = true; // Block context menu since we're dragging
 
-      // Set up modifier mode and persistent selection
-      if (state.modifierMode === 'add') {
-        state.persistentSelection = new Set(state.selectedElements);
-      } else if (state.modifierMode === 'remove') {
+      // Modifier drags build on the existing selection; a plain drag starts fresh
+      if (state.modifierMode) {
         state.persistentSelection = new Set(state.selectedElements);
       } else {
-        state.persistentSelection.clear();
         clearSelection();
       }
 
@@ -831,14 +822,7 @@
     }
 
     if (e.key === 'Escape') {
-      if (state.isSelecting) {
-        state.isSelecting = false;
-        stopAutoScroll();
-        if (lassoEl) lassoEl.style.display = 'none';
-        document.body.classList.remove('snaplinkit-selecting');
-      }
-      clearSelection();
-      hideMenu();
+      cancelSelection();
     }
   }
 
