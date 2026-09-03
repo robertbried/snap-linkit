@@ -44,7 +44,6 @@
   // Extension active state (can be disabled via blacklist)
   let extensionActive = false;
   let listenersAttached = false;
-  let spaObserver = null; // MutationObserver for SPA navigation
 
   // ============================================
   // DOM ELEMENTS
@@ -150,7 +149,7 @@
   function checkBlacklistAndInit() {
     if (shouldRunOnCurrentSite()) {
       extensionActive = true;
-      init();
+      attachEventListeners();
     } else {
       extensionActive = false;
     }
@@ -853,12 +852,6 @@
     document.removeEventListener('dragstart', onDragStart, true);
     document.removeEventListener('contextmenu', onContextMenu, true);
 
-    // Disconnect SPA observer to prevent memory leak
-    if (spaObserver) {
-      spaObserver.disconnect();
-      spaObserver = null;
-    }
-
     listenersAttached = false;
   }
 
@@ -880,25 +873,12 @@
   // ============================================
   // INITIALIZATION
   // ============================================
+  // Whether the extension runs here depends only on location.hostname and
+  // the stored settings. The hostname cannot change without a real
+  // navigation (history.pushState is same-origin), and settings changes
+  // arrive via storage.onChanged, so no URL watcher is needed.
 
-  function init() {
-    attachEventListeners();
-
-    // SPA navigation detection
-    let lastUrl = location.href;
-    spaObserver = new MutationObserver(() => {
-      if (lastUrl !== location.href) {
-        lastUrl = location.href;
-        updateExtensionState();
-      }
-    });
-    spaObserver.observe(document.body, { childList: true, subtree: true });
-
-    // Back/forward navigation
-    window.addEventListener('popstate', updateExtensionState);
-  }
-
-  // Start by loading settings, which will then check blacklist and init
+  // Start by loading settings, which will then check blacklist and attach listeners
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', loadSettings);
   } else {
