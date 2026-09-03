@@ -9,8 +9,6 @@
   const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
 
   // Defaults live in defaults.js (shared with content.js)
-  const DEFAULTS = SnapLinkitDefaults();
-
   // DOM element cache
   const elements = {};
 

@@ -1,9 +1,6 @@
 /**
  * Snap Linkit - Content Script
  * Privacy 100% Guaranteed - No data collection, no external requests
- *
- * FIXED: Removed magnetic snapping, removed counter badge, instant checkbox toggle
- * v1.2.0: Settings integration, blacklist/whitelist support, keyboard shortcuts
  */
 
 (function() {
@@ -13,8 +10,6 @@
   // SETTINGS
   // ============================================
   // Defaults live in defaults.js (shared with popup.js)
-  const DEFAULTS = SnapLinkitDefaults();
-
   // Mutable settings object - starts with defaults, hydrated async
   let settings = SnapLinkitDefaults();
 
@@ -234,7 +229,7 @@
     };
   }
 
-  // FIXED: Simple intersection check - NO magnetic snapping
+  // Axis-aligned rectangle intersection (no snapping tolerance)
   function rectsIntersect(r1, r2) {
     return !(
       r1.right < r2.left ||
@@ -244,7 +239,7 @@
     );
   }
 
-  // FIXED: Scroll-aware coordinate calculation
+  // Scroll-aware coordinate calculation
   // Uses scroll delta to adjust start point WITHOUT mutating state.startX/Y
   function getSelectionRect() {
     // Calculate how much the page has scrolled since drag started
@@ -380,7 +375,6 @@
     return lassoEl;
   }
 
-  // FIXED: Exact 1:1 coordinate mapping
   function updateLasso() {
     if (!lassoEl) return;
     const rect = getSelectionRect();
@@ -652,7 +646,7 @@
     }
   }
 
-  // FIXED: Smart toggle - inverts based on majority state
+  // Smart toggle - inverts based on majority state
   function smartToggleCheckboxes(checkboxes) {
     if (checkboxes.length === 0) return;
 
@@ -674,7 +668,7 @@
     clearSelection();
   }
 
-  // FIXED: Smart toggle for radios - select first unselected or cycle
+  // Radios: select the first one in the selection
   function smartToggleRadios(radios) {
     if (radios.length === 0) return;
 
@@ -691,7 +685,6 @@
   // SELECTION LOGIC
   // ============================================
 
-  // FIXED: No magnetic snapping - exact intersection only
   function updateSelection() {
     const selRect = getSelectionRect();
     const elements = getSelectableElements();
@@ -700,7 +693,6 @@
 
     elements.forEach(el => {
       const elRect = getElementRect(el);
-      // FIXED: No snap distance - exact intersection
       if (rectsIntersect(selRect, elRect)) {
         currentlyInLasso.add(el);
       }
@@ -908,7 +900,7 @@
       return;
     }
 
-    // FIXED: Categorize and handle differently
+    // Categorize and handle differently
     const { links, checkboxes, radios, buttons } = categorizeSelection();
 
     // Priority: If ONLY checkboxes/radios (no links), instant toggle
