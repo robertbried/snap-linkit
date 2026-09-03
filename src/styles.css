@@ -95,12 +95,6 @@
   flex-shrink: 0;
 }
 
-.snaplinkit-menu-divider {
-  height: 1px;
-  background: #bf00ff33;
-  margin: 4px 0;
-}
-
 /* Confirmation Dialog */
 .snaplinkit-confirm {
   position: fixed;
