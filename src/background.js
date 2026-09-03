@@ -187,6 +187,30 @@ function discardTabsWhenReady(tabIds) {
 }
 
 /**
+ * Derive a download filename from the URL path: last path segment,
+ * percent-decoded, with characters the downloads API rejects replaced and
+ * leading dots stripped. Falls back to "download" for paths ending in "/".
+ */
+function filenameFromUrl(url) {
+  let segment = '';
+  try {
+    segment = new URL(url).pathname.split('/').pop() || '';
+  } catch (e) {
+    return 'download';
+  }
+  try {
+    segment = decodeURIComponent(segment);
+  } catch (e) {
+    // Malformed escape sequence: keep the encoded form
+  }
+  const cleaned = segment
+    .replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_')
+    .replace(/^\.+/, '')
+    .trim();
+  return cleaned || 'download';
+}
+
+/**
  * Download files via browser download API
  * @returns {Promise<{requested: number, downloaded: number, openedInTab: number, failed: number}>}
  */
@@ -201,8 +225,7 @@ async function downloadFiles(urls) {
       continue;
     }
     try {
-      // Extract filename from URL
-      const filename = url.split('/').pop().split('?')[0] || 'download';
+      const filename = filenameFromUrl(url);
 
       await browserAPI.downloads.download({
         url: url,
