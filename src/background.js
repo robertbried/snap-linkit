@@ -25,22 +25,32 @@ browserAPI.commands.onCommand.addListener(async (command) => {
 // ============================================
 // MESSAGE HANDLER
 // ============================================
-// Listen for messages from content script
+// Listen for messages from content script. Every action resolves to a
+// summary ({ requested, opened/downloaded, failed }) that the content
+// script turns into user feedback. sendResponse + `return true` keeps the
+// channel open until the work is done and works for both browser.* and
+// chrome.* namespaces.
 browserAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  switch (message.action) {
-    case 'openTabs':
+  let work;
+  switch (message?.action) {
+    case 'openTabs': {
       // Clamp delay to 0-2000ms range
-      const delay = Math.max(0, Math.min(2000, message.delay || 50));
-      const discardAfterOpen = message.discardAfterOpen || false;
-      openTabsSequentially(message.urls, sender.tab?.index, delay, discardAfterOpen);
+      const delay = Math.max(0, Math.min(2000, Number(message.delay) || 50));
+      const discardAfterOpen = message.discardAfterOpen === true;
+      work = openTabsSequentially(message.urls, sender.tab?.index, delay, discardAfterOpen);
       break;
+    }
 
     case 'downloadFiles':
-      downloadFiles(message.urls);
+      work = downloadFiles(message.urls);
       break;
+
+    default:
+      return false;
   }
-  // No async response needed - return false to close message port immediately
-  return false;
+
+  work.then(sendResponse, (error) => sendResponse({ error: error?.message || String(error) }));
+  return true;
 });
 
 /**
@@ -70,9 +80,11 @@ function isOpenableUrl(url) {
  * @param {number} currentTabIndex - Index of current tab for positioning
  * @param {number} delayMs - Delay between tab opens (0-2000ms, already clamped)
  * @param {boolean} discardAfterOpen - If true, attempt to discard tabs after opening (memory saver)
+ * @returns {Promise<{requested: number, opened: number, failed: number}>}
  */
 async function openTabsSequentially(urls, currentTabIndex = 0, delayMs = 50, discardAfterOpen = false) {
-  if (!Array.isArray(urls) || urls.length === 0) return;
+  const result = { requested: Array.isArray(urls) ? urls.length : 0, opened: 0, failed: 0 };
+  if (result.requested === 0) return result;
 
   const supportsDiscard = canDiscardTabs();
   const tabsToDiscard = [];
@@ -80,6 +92,7 @@ async function openTabsSequentially(urls, currentTabIndex = 0, delayMs = 50, dis
   for (let i = 0; i < urls.length; i++) {
     if (!isOpenableUrl(urls[i])) {
       console.debug('Snap Linkit: skipping unopenable URL', urls[i]);
+      result.failed++;
       continue;
     }
     try {
@@ -88,6 +101,7 @@ async function openTabsSequentially(urls, currentTabIndex = 0, delayMs = 50, dis
         active: false,
         index: currentTabIndex + i + 1
       });
+      result.opened++;
 
       // Track tabs for potential discard (only http/https URLs)
       if (discardAfterOpen && supportsDiscard && tab.id) {
@@ -99,7 +113,8 @@ async function openTabsSequentially(urls, currentTabIndex = 0, delayMs = 50, dis
         await new Promise(resolve => setTimeout(resolve, delayMs));
       }
     } catch (error) {
-      console.debug('Snap Linkit: Could not open tab for', urls[i]);
+      result.failed++;
+      console.debug('Snap Linkit: Could not open tab for', urls[i], error?.message);
     }
   }
 
@@ -107,6 +122,8 @@ async function openTabsSequentially(urls, currentTabIndex = 0, delayMs = 50, dis
   if (tabsToDiscard.length > 0) {
     discardTabsWhenReady(tabsToDiscard);
   }
+
+  return result;
 }
 
 /**
@@ -171,13 +188,16 @@ function discardTabsWhenReady(tabIds) {
 
 /**
  * Download files via browser download API
+ * @returns {Promise<{requested: number, downloaded: number, openedInTab: number, failed: number}>}
  */
 async function downloadFiles(urls) {
-  if (!Array.isArray(urls) || urls.length === 0) return;
+  const result = { requested: Array.isArray(urls) ? urls.length : 0, downloaded: 0, openedInTab: 0, failed: 0 };
+  if (result.requested === 0) return result;
 
   for (const url of urls) {
     if (!isOpenableUrl(url)) {
       console.debug('Snap Linkit: skipping unopenable URL', url);
+      result.failed++;
       continue;
     }
     try {
@@ -189,13 +209,18 @@ async function downloadFiles(urls) {
         filename: filename,
         saveAs: false
       });
+      result.downloaded++;
     } catch (error) {
       // Fallback: open in new tab (download will trigger)
       try {
         await browserAPI.tabs.create({ url, active: false });
+        result.openedInTab++;
       } catch (e) {
-        console.debug('Snap Linkit: Could not download', url);
+        result.failed++;
+        console.debug('Snap Linkit: Could not download', url, e?.message);
       }
     }
   }
+
+  return result;
 }

@@ -574,16 +574,39 @@
     }
   }
 
-  function doOpenTabs(urls, discardAfterOpen = false) {
-    browserAPI.runtime.sendMessage({
+  // Send an action to background.js and normalise the outcome. Resolves to
+  // { ok: true, ...summary } or { ok: false, error }; never rejects.
+  async function sendToBackground(message) {
+    try {
+      const response = await browserAPI.runtime.sendMessage(message);
+      if (!response) return { ok: false, error: 'no response from background script' };
+      if (response.error) return { ok: false, error: response.error };
+      return { ok: true, ...response };
+    } catch (error) {
+      return { ok: false, error: error?.message || String(error) };
+    }
+  }
+
+  function plural(count, noun) {
+    return `${count} ${noun}${count !== 1 ? 's' : ''}`;
+  }
+
+  async function doOpenTabs(urls, discardAfterOpen = false) {
+    const modeText = discardAfterOpen ? ' (unloaded)' : '';
+    showToast(`Opening ${plural(urls.length, 'tab')}${modeText}...`);
+    clearSelection();
+
+    const result = await sendToBackground({
       action: 'openTabs',
       urls,
       delay: settings.tabOpenDelay,
       discardAfterOpen
     });
-    const modeText = discardAfterOpen ? ' (unloaded)' : '';
-    showToast(`Opening ${urls.length} tab${urls.length !== 1 ? 's' : ''}${modeText}...`);
-    clearSelection();
+    if (!result.ok) {
+      showToast(`Snap Linkit: could not open tabs (${result.error})`);
+    } else if (result.failed > 0) {
+      showToast(`Snap Linkit: ${result.failed} of ${plural(result.requested, 'tab')} could not be opened`);
+    }
   }
 
   // Legacy copy path for when the async Clipboard API is unavailable or refuses.
@@ -623,10 +646,16 @@
     }
   }
 
-  function downloadFiles(urls) {
-    browserAPI.runtime.sendMessage({ action: 'downloadFiles', urls });
-    showToast(`Downloading ${urls.length} file${urls.length !== 1 ? 's' : ''}...`);
+  async function downloadFiles(urls) {
+    showToast(`Downloading ${plural(urls.length, 'file')}...`);
     clearSelection();
+
+    const result = await sendToBackground({ action: 'downloadFiles', urls });
+    if (!result.ok) {
+      showToast(`Snap Linkit: could not start downloads (${result.error})`);
+    } else if (result.failed > 0) {
+      showToast(`Snap Linkit: ${result.failed} of ${plural(result.requested, 'file')} could not be downloaded`);
+    }
   }
 
   // FIXED: Smart toggle - inverts based on majority state
