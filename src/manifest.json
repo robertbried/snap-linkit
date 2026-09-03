@@ -53,6 +53,7 @@
         "<all_urls>"
       ],
       "js": [
+        "defaults.js",
         "content.js"
       ],
       "css": [

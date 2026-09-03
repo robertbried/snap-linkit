@@ -8,22 +8,14 @@
 
   const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
 
-  // Default settings - must match content.js DEFAULTS
-  const DEFAULTS = {
-    scrollEdgeThreshold: 50,
-    autoScrollSpeed: 15,
-    maxTabsWithoutConfirm: 20,
-    tabOpenDelay: 50,
-    blacklist: [],
-    blacklistMode: 'blacklist',
-    extensionEnabled: true,
-  };
+  // Defaults live in defaults.js (shared with content.js)
+  const DEFAULTS = SnapLinkitDefaults();
 
   // DOM element cache
   const elements = {};
 
-  // Current settings state
-  let currentSettings = { ...DEFAULTS };
+  // Current settings state (fresh copy: never alias the defaults' blacklist array)
+  let currentSettings = SnapLinkitDefaults();
 
   // Track if settings have unsaved changes
   let hasUnsavedChanges = false;
@@ -87,7 +79,7 @@
       } catch (e) {
         // Extension context invalidated - use defaults
         console.warn('[Snap Linkit] Extension context error:', e.message);
-        currentSettings = { ...DEFAULTS };
+        currentSettings = SnapLinkitDefaults();
         resolve();
       }
     });
@@ -306,7 +298,7 @@
 
   async function resetToDefaults() {
     if (!confirm('Reset all settings to defaults?')) return;
-    currentSettings = { ...DEFAULTS };
+    currentSettings = SnapLinkitDefaults();
     await saveSettings();
     updateUI();
   }

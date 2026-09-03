@@ -10,20 +10,13 @@
   'use strict';
 
   // ============================================
-  // SETTINGS (replaces hardcoded CONFIG)
+  // SETTINGS
   // ============================================
-  const DEFAULTS = {
-    scrollEdgeThreshold: 50,
-    autoScrollSpeed: 15,
-    maxTabsWithoutConfirm: 20,
-    tabOpenDelay: 50,
-    blacklist: [],
-    blacklistMode: 'blacklist',
-    extensionEnabled: true,
-  };
+  // Defaults live in defaults.js (shared with popup.js)
+  const DEFAULTS = SnapLinkitDefaults();
 
   // Mutable settings object - starts with defaults, hydrated async
-  let settings = { ...DEFAULTS };
+  let settings = SnapLinkitDefaults();
 
   // Hardcoded (not configurable - frame timing)
   const FRAME_INTERVAL = 16;
