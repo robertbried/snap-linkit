@@ -5,3 +5,5 @@ web-ext-lint*
 GATE1_ORIENT.md
 REVIEW.md
 node_modules/
+HANDOFF.md
+smoke-test.mjs
