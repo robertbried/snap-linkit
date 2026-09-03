@@ -331,6 +331,51 @@
   // UI CREATION
   // ============================================
 
+  // Menu icons as SVG shape lists, rendered with createElementNS (no innerHTML)
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+  const ICONS = {
+    openTabs: [
+      ['path', { d: 'M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6' }],
+      ['polyline', { points: '15 3 21 3 21 9' }],
+      ['line', { x1: '10', y1: '14', x2: '21', y2: '3' }]
+    ],
+    openUnloaded: [
+      ['circle', { cx: '12', cy: '12', r: '10' }],
+      ['path', { d: 'M12 6v6l4 2' }]
+    ],
+    copyUrls: [
+      ['rect', { x: '9', y: '9', width: '13', height: '13', rx: '2', ry: '2' }],
+      ['path', { d: 'M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1' }]
+    ],
+    copyText: [
+      ['path', { d: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z' }],
+      ['polyline', { points: '14 2 14 8 20 8' }],
+      ['line', { x1: '16', y1: '13', x2: '8', y2: '13' }],
+      ['line', { x1: '16', y1: '17', x2: '8', y2: '17' }]
+    ],
+    download: [
+      ['path', { d: 'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4' }],
+      ['polyline', { points: '7 10 12 15 17 10' }],
+      ['line', { x1: '12', y1: '15', x2: '12', y2: '3' }]
+    ]
+  };
+
+  function svgIcon(shapes) {
+    const svg = document.createElementNS(SVG_NS, 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('fill', 'none');
+    svg.setAttribute('stroke', 'currentColor');
+    svg.setAttribute('stroke-width', '2');
+    for (const [tag, attrs] of shapes) {
+      const shape = document.createElementNS(SVG_NS, tag);
+      for (const [name, value] of Object.entries(attrs)) {
+        shape.setAttribute(name, value);
+      }
+      svg.appendChild(shape);
+    }
+    return svg;
+  }
+
   function createLasso() {
     if (lassoEl && lassoEl.isConnected) return lassoEl;
     if (lassoEl) lassoEl.remove(); // body was replaced; rebuild
@@ -366,30 +411,36 @@
     // Header
     const header = document.createElement('div');
     header.className = 'snaplinkit-menu-header';
-    header.innerHTML = `${urls.length} link${urls.length !== 1 ? 's' : ''} selected<br><small style="opacity:0.7;font-weight:normal">Alt+drag to remove, Shift+drag to add more</small>`;
+    header.append(`${urls.length} link${urls.length !== 1 ? 's' : ''} selected`);
+    header.appendChild(document.createElement('br'));
+    const hint = document.createElement('small');
+    hint.style.opacity = '0.7';
+    hint.style.fontWeight = 'normal';
+    hint.textContent = 'Alt+drag to remove, Shift+drag to add more';
+    header.appendChild(hint);
     menuEl.appendChild(header);
 
     // Menu items for links only
     const items = [
       {
         label: `Open ${urls.length} in New Tabs`,
-        icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>`,
+        icon: ICONS.openTabs,
         action: () => openTabs(urls, false)
       },
       {
         label: `Open ${urls.length} Unloaded`,
-        icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>`,
+        icon: ICONS.openUnloaded,
         title: 'Memory saver: tabs appear but don\'t load until clicked',
         action: () => openTabs(urls, true)
       },
       {
         label: 'Copy URLs to Clipboard',
-        icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`,
+        icon: ICONS.copyUrls,
         action: () => copyToClipboard(urls.join('\n'), 'URLs copied!')
       },
       {
         label: 'Copy Link Text',
-        icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>`,
+        icon: ICONS.copyText,
         action: () => copyToClipboard(getLinkTexts().join('\n'), 'Link text copied!')
       }
     ];
@@ -397,7 +448,7 @@
     if (downloadUrls.length > 0) {
       items.push({
         label: `Download ${downloadUrls.length} File${downloadUrls.length !== 1 ? 's' : ''}`,
-        icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`,
+        icon: ICONS.download,
         action: () => downloadFiles(downloadUrls)
       });
     }
@@ -405,7 +456,10 @@
     items.forEach(item => {
       const btn = document.createElement('button');
       btn.className = 'snaplinkit-menu-item';
-      btn.innerHTML = `${item.icon}<span>${item.label}</span>`;
+      btn.appendChild(svgIcon(item.icon));
+      const label = document.createElement('span');
+      label.textContent = item.label;
+      btn.appendChild(label);
       if (item.title) {
         btn.title = item.title;
       }
@@ -464,14 +518,21 @@
 
     const dialog = document.createElement('div');
     dialog.className = 'snaplinkit-confirm';
-    dialog.innerHTML = `
-      <h3>Open ${count} tabs?</h3>
-      <p>You're about to open ${count} tabs at once. This might slow down your browser. Are you sure?</p>
-      <div class="snaplinkit-confirm-buttons">
-        <button class="snaplinkit-confirm-btn secondary" data-action="cancel">Cancel</button>
-        <button class="snaplinkit-confirm-btn primary" data-action="confirm">Open All</button>
-      </div>
-    `;
+
+    const title = document.createElement('h3');
+    title.textContent = `Open ${count} tabs?`;
+    const message = document.createElement('p');
+    message.textContent = `You're about to open ${count} tabs at once. This might slow down your browser. Are you sure?`;
+    const buttons = document.createElement('div');
+    buttons.className = 'snaplinkit-confirm-buttons';
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'snaplinkit-confirm-btn secondary';
+    cancelBtn.textContent = 'Cancel';
+    const confirmBtn = document.createElement('button');
+    confirmBtn.className = 'snaplinkit-confirm-btn primary';
+    confirmBtn.textContent = 'Open All';
+    buttons.append(cancelBtn, confirmBtn);
+    dialog.append(title, message, buttons);
 
     document.body.appendChild(overlay);
     document.body.appendChild(dialog);
@@ -481,8 +542,8 @@
       dialog.remove();
     };
 
-    dialog.querySelector('[data-action="cancel"]').addEventListener('click', cleanup);
-    dialog.querySelector('[data-action="confirm"]').addEventListener('click', () => {
+    cancelBtn.addEventListener('click', cleanup);
+    confirmBtn.addEventListener('click', () => {
       cleanup();
       onConfirm();
     });

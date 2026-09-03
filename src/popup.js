@@ -188,20 +188,28 @@
     if (!elements.blacklistList) return;
 
     const list = currentSettings.blacklist || [];
+    elements.blacklistList.replaceChildren();
+
     if (list.length === 0) {
-      elements.blacklistList.innerHTML = '<div class="blacklist-empty">No sites added</div>';
+      const empty = document.createElement('div');
+      empty.className = 'blacklist-empty';
+      empty.textContent = 'No sites added';
+      elements.blacklistList.appendChild(empty);
       return;
     }
 
-    elements.blacklistList.innerHTML = '';
     list.forEach((pattern, index) => {
       const item = document.createElement('div');
       item.className = 'blacklist-item';
-      item.innerHTML = `
-        <span class="pattern">${escapeHtml(pattern)}</span>
-        <button class="remove-btn" data-index="${index}" title="Remove">&times;</button>
-      `;
-      item.querySelector('.remove-btn').addEventListener('click', () => removeFromBlacklist(index));
+      const text = document.createElement('span');
+      text.className = 'pattern';
+      text.textContent = pattern;
+      const removeBtn = document.createElement('button');
+      removeBtn.className = 'remove-btn';
+      removeBtn.title = 'Remove';
+      removeBtn.textContent = '\u00d7';
+      removeBtn.addEventListener('click', () => removeFromBlacklist(index));
+      item.append(text, removeBtn);
       elements.blacklistList.appendChild(item);
     });
   }
@@ -301,16 +309,5 @@
     currentSettings = SnapLinkitDefaults();
     await saveSettings();
     updateUI();
-  }
-
-  function escapeHtml(str) {
-    const escapeMap = {
-      '&': '&amp;',
-      '<': '&lt;',
-      '>': '&gt;',
-      '"': '&quot;',
-      "'": '&#39;'
-    };
-    return str.replace(/[&<>"']/g, (c) => escapeMap[c]);
   }
 })();
