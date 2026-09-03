@@ -38,6 +38,7 @@
     await loadSettings();
     bindEvents();
     updateUI();
+    showVersion();
 
     // Flush a pending debounced save if the popup closes mid-drag
     window.addEventListener('pagehide', () => {
@@ -165,6 +166,16 @@
 
     // Render blacklist
     renderBlacklist();
+  }
+
+  function showVersion() {
+    const label = document.getElementById('versionLabel');
+    if (!label) return;
+    try {
+      label.textContent = `Snap Linkit v${browserAPI.runtime.getManifest().version}`;
+    } catch (e) {
+      // Leave the plain name if the manifest is unavailable
+    }
   }
 
   function updateModeLabel() {
