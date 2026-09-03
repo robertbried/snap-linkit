@@ -13,8 +13,10 @@ browserAPI.commands.onCommand.addListener(async (command) => {
     const [tab] = await browserAPI.tabs.query({ active: true, currentWindow: true });
     if (!tab?.id) return;
 
-    // Forward command to content script
-    browserAPI.tabs.sendMessage(tab.id, { action: command });
+    // Forward command to content script. Awaited so a missing receiver
+    // (about:, AMO, PDF viewer, ungranted host) lands in the catch below
+    // instead of surfacing as an unhandled rejection.
+    await browserAPI.tabs.sendMessage(tab.id, { action: command });
   } catch (error) {
     console.debug('Snap Linkit: Could not send command to tab:', error.message);
   }
