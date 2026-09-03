@@ -4,7 +4,6 @@
   "version": "1.2.1",
   "description": "Select and manage multiple links, checkboxes, and buttons with a simple drag. Privacy 100% Guaranteed.",
   "permissions": [
-    "activeTab",
     "clipboardWrite",
     "storage",
     "downloads"
