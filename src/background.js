@@ -49,12 +49,14 @@ function canDiscardTabs() {
 }
 
 /**
- * Check if URL is http/https (discard only works for these)
+ * Only http(s) URLs can be opened by tabs.create / downloads.download
+ * (and only those can be discarded). Mirrors isOpenableUrl in content.js;
+ * re-checked here so the background never trusts message payloads.
  */
-function isDiscardableUrl(url) {
+const OPENABLE_PROTOCOLS = new Set(['http:', 'https:']);
+function isOpenableUrl(url) {
   try {
-    const parsed = new URL(url);
-    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+    return typeof url === 'string' && OPENABLE_PROTOCOLS.has(new URL(url).protocol);
   } catch (e) {
     return false;
   }
@@ -74,6 +76,10 @@ async function openTabsSequentially(urls, currentTabIndex = 0, delayMs = 50, dis
   const tabsToDiscard = [];
 
   for (let i = 0; i < urls.length; i++) {
+    if (!isOpenableUrl(urls[i])) {
+      console.debug('Snap Linkit: skipping unopenable URL', urls[i]);
+      continue;
+    }
     try {
       const tab = await browserAPI.tabs.create({
         url: urls[i],
@@ -82,7 +88,7 @@ async function openTabsSequentially(urls, currentTabIndex = 0, delayMs = 50, dis
       });
 
       // Track tabs for potential discard (only http/https URLs)
-      if (discardAfterOpen && supportsDiscard && tab.id && isDiscardableUrl(urls[i])) {
+      if (discardAfterOpen && supportsDiscard && tab.id) {
         tabsToDiscard.push(tab.id);
       }
 
@@ -168,6 +174,10 @@ async function downloadFiles(urls) {
   if (!Array.isArray(urls) || urls.length === 0) return;
 
   for (const url of urls) {
+    if (!isOpenableUrl(url)) {
+      console.debug('Snap Linkit: skipping unopenable URL', url);
+      continue;
+    }
     try {
       // Extract filename from URL
       const filename = url.split('/').pop().split('?')[0] || 'download';

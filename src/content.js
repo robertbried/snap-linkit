@@ -56,6 +56,19 @@
   // ============================================
   const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
 
+  // Only http(s) URLs can be opened by tabs.create or fetched by
+  // downloads.download; javascript:, data:, blob:, file:, about: and
+  // friends are rejected by the browser. Checked on the resolved URL so
+  // case and whitespace variants of the attribute are covered.
+  const OPENABLE_PROTOCOLS = new Set(['http:', 'https:']);
+  function isOpenableUrl(url) {
+    try {
+      return OPENABLE_PROTOCOLS.has(new URL(url).protocol);
+    } catch (e) {
+      return false;
+    }
+  }
+
   // ============================================
   // SETTINGS LOADER
   // ============================================
@@ -201,12 +214,10 @@
       }
 
       if (el.tagName === 'A') {
-        const href = el.getAttribute('href');
-        if (!href || href === '#' || href.startsWith('#') ||
-            href.startsWith('javascript:') || href.startsWith('mailto:') ||
-            href.startsWith('tel:')) {
-          return false;
-        }
+        // Skip same-page fragment links, then anything the browser cannot open
+        const raw = (el.getAttribute('href') || '').trim();
+        if (!raw || raw.startsWith('#')) return false;
+        if (!isOpenableUrl(el.href)) return false;
       }
 
       return true;
@@ -257,7 +268,7 @@
   function getUniqueUrls() {
     const urls = new Set();
     state.selectedElements.forEach(el => {
-      if (el.tagName === 'A' && el.href) {
+      if (el.tagName === 'A' && isOpenableUrl(el.href)) {
         urls.add(el.href);
       }
     });
@@ -280,7 +291,7 @@
     const downloadExtensions = /\.(pdf|zip|rar|7z|tar|gz|doc|docx|xls|xlsx|ppt|pptx|mp3|mp4|avi|mov|jpg|jpeg|png|gif|svg)$/i;
 
     state.selectedElements.forEach(el => {
-      if (el.tagName === 'A' && el.href && downloadExtensions.test(el.href)) {
+      if (el.tagName === 'A' && isOpenableUrl(el.href) && downloadExtensions.test(el.href)) {
         urls.push(el.href);
       }
     });
