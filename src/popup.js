@@ -78,14 +78,20 @@
       showSaveIndicator();
     } catch (error) {
       console.error('[Snap Linkit] Save error:', error);
+      showSaveIndicator(false);
     }
   }
 
-  function showSaveIndicator() {
-    if (elements.saveIndicator) {
-      elements.saveIndicator.classList.add('visible');
-      setTimeout(() => elements.saveIndicator.classList.remove('visible'), 1000);
-    }
+  let saveIndicatorTimer = null;
+
+  function showSaveIndicator(saved = true) {
+    const indicator = elements.saveIndicator;
+    if (!indicator) return;
+    indicator.textContent = saved ? 'Saved!' : 'Save failed';
+    indicator.classList.toggle('error', !saved);
+    indicator.classList.add('visible');
+    clearTimeout(saveIndicatorTimer);
+    saveIndicatorTimer = setTimeout(() => indicator.classList.remove('visible'), saved ? 1000 : 2500);
   }
 
   function bindEvents() {
