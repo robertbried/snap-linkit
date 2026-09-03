@@ -586,21 +586,41 @@
     clearSelection();
   }
 
-  function copyToClipboard(text, successMessage) {
-    navigator.clipboard.writeText(text).then(() => {
+  // Legacy copy path for when the async Clipboard API is unavailable or refuses.
+  // Returns execCommand's boolean instead of assuming success.
+  function legacyCopy(text) {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    let copied = false;
+    try {
+      copied = document.execCommand('copy') === true;
+    } catch (e) {
+      copied = false;
+    }
+    textarea.remove();
+    return copied;
+  }
+
+  async function copyToClipboard(text, successMessage) {
+    let copied = false;
+    try {
+      await navigator.clipboard.writeText(text);
+      copied = true;
+    } catch (e) {
+      copied = legacyCopy(text);
+    }
+
+    if (copied) {
       showToast(successMessage);
-    }).catch(() => {
-      const textarea = document.createElement('textarea');
-      textarea.value = text;
-      textarea.style.position = 'fixed';
-      textarea.style.opacity = '0';
-      document.body.appendChild(textarea);
-      textarea.select();
-      document.execCommand('copy');
-      textarea.remove();
-      showToast(successMessage);
-    });
-    clearSelection();
+      clearSelection();
+    } else {
+      // Keep the selection so the user can retry (e.g. via Ctrl+C)
+      showToast('Snap Linkit: copy failed');
+    }
   }
 
   function downloadFiles(urls) {
