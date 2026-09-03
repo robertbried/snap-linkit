@@ -1,0 +1,931 @@
+/**
+ * Snap Linkit - Content Script
+ * Privacy 100% Guaranteed - No data collection, no external requests
+ *
+ * FIXED: Removed magnetic snapping, removed counter badge, instant checkbox toggle
+ * v1.2.0: Settings integration, blacklist/whitelist support, keyboard shortcuts
+ */
+
+(function() {
+  'use strict';
+
+  // ============================================
+  // SETTINGS (replaces hardcoded CONFIG)
+  // ============================================
+  const DEFAULTS = {
+    scrollEdgeThreshold: 50,
+    autoScrollSpeed: 15,
+    maxTabsWithoutConfirm: 20,
+    tabOpenDelay: 50,
+    blacklist: [],
+    blacklistMode: 'blacklist',
+    extensionEnabled: true,
+  };
+
+  // Mutable settings object - starts with defaults, hydrated async
+  let settings = { ...DEFAULTS };
+
+  // Hardcoded (not configurable - frame timing)
+  const FRAME_INTERVAL = 16;
+  const MIN_DRAG_DISTANCE = 5; // Pixels to drag before activating selection (allows normal clicks)
+
+  // ============================================
+  // STATE
+  // ============================================
+  let state = {
+    isSelecting: false,
+    isDragging: false,   // True only after MIN_DRAG_DISTANCE reached
+    blockNextContextMenu: false, // Block context menu after right-click drag
+    startX: 0,           // Viewport X at drag start (never mutated during drag)
+    startY: 0,           // Viewport Y at drag start (never mutated during drag)
+    startScrollX: 0,     // window.scrollX at drag start
+    startScrollY: 0,     // window.scrollY at drag start
+    currentX: 0,
+    currentY: 0,
+    selectedElements: new Set(),
+    persistentSelection: new Set(),
+    modifierMode: null,
+    scrollInterval: null,
+  };
+
+  // Extension active state (can be disabled via blacklist)
+  let extensionActive = false;
+  let listenersAttached = false;
+  let spaObserver = null; // MutationObserver for SPA navigation
+
+  // ============================================
+  // DOM ELEMENTS
+  // ============================================
+  let lassoEl = null;
+  let menuEl = null;
+
+  // ============================================
+  // BROWSER API
+  // ============================================
+  const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
+
+  // ============================================
+  // SETTINGS LOADER
+  // ============================================
+
+  // Load settings from storage (sync with local fallback)
+  function loadSettings() {
+    browserAPI.storage.sync.get(DEFAULTS, (syncStored) => {
+      if (browserAPI.runtime.lastError) {
+        // Sync failed, try local
+        browserAPI.storage.local.get(DEFAULTS, (localStored) => {
+          settings = { ...DEFAULTS, ...localStored };
+          checkBlacklistAndInit();
+        });
+        return;
+      }
+
+      // Also check local storage for fallback data (in case sync quota was exceeded)
+      browserAPI.storage.local.get(null, (localStored) => {
+        // Merge: sync takes priority, but local fills gaps
+        settings = { ...DEFAULTS, ...localStored, ...syncStored };
+        checkBlacklistAndInit();
+      });
+    });
+  }
+
+  // Listen for live settings updates
+  browserAPI.storage.onChanged.addListener((changes, area) => {
+    if (area !== 'sync') return;
+
+    Object.keys(changes).forEach(key => {
+      if (key in settings) {
+        settings[key] = changes[key].newValue;
+      }
+    });
+
+    // Re-check blacklist on relevant settings changes
+    if ('blacklist' in changes || 'blacklistMode' in changes || 'extensionEnabled' in changes) {
+      updateExtensionState();
+    }
+  });
+
+  // ============================================
+  // BLACKLIST / WHITELIST
+  // ============================================
+
+  function matchesPattern(hostname, pattern) {
+    // Convert wildcard pattern to regex
+    // *.google.com matches mail.google.com, www.google.com, etc.
+    // First, escape backslashes, then escape other regex special chars, then convert * to .*
+    const escaped = pattern
+      .replace(/\\/g, '\\\\')           // Escape backslashes first
+      .replace(/[.+?^${}()|[\]]/g, '\\$&')  // Escape regex special chars (except *)
+      .replace(/\*/g, '.*');            // Convert wildcards to regex
+    const regexStr = '^' + escaped + '$';
+    try {
+      return new RegExp(regexStr, 'i').test(hostname);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function isOnList(hostname) {
+    const patterns = settings.blacklist || [];
+    return patterns.some(pattern => matchesPattern(hostname, pattern));
+  }
+
+  function shouldRunOnCurrentSite() {
+    if (!settings.extensionEnabled) return false;
+
+    const hostname = window.location.hostname;
+    const onList = isOnList(hostname);
+
+    // Blacklist mode: run unless on list
+    // Whitelist mode: run only if on list
+    return settings.blacklistMode === 'blacklist' ? !onList : onList;
+  }
+
+  function updateExtensionState() {
+    const shouldRun = shouldRunOnCurrentSite();
+
+    if (shouldRun && !extensionActive) {
+      extensionActive = true;
+      attachEventListeners();
+    } else if (!shouldRun && extensionActive) {
+      extensionActive = false;
+      detachEventListeners();
+      // Clean up any active UI
+      if (state.isSelecting) {
+        state.isSelecting = false;
+        stopAutoScroll();
+        if (lassoEl) lassoEl.style.display = 'none';
+        document.body.classList.remove('snaplinkit-selecting');
+      }
+      clearSelection();
+      hideMenu();
+    }
+  }
+
+  function checkBlacklistAndInit() {
+    if (shouldRunOnCurrentSite()) {
+      extensionActive = true;
+      init();
+    } else {
+      extensionActive = false;
+    }
+  }
+
+  // ============================================
+  // MESSAGE HANDLER (keyboard shortcuts from background.js)
+  // ============================================
+
+  browserAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    switch (message.action) {
+      case 'toggle-extension':
+        settings.extensionEnabled = !settings.extensionEnabled;
+        browserAPI.storage.sync.set({ extensionEnabled: settings.extensionEnabled });
+        updateExtensionState();
+        showToast(settings.extensionEnabled ? 'Snap Linkit enabled' : 'Snap Linkit disabled');
+        break;
+
+      case 'open-selected-tabs':
+        if (extensionActive && state.selectedElements.size > 0) {
+          const urls = getUniqueUrls();
+          if (urls.length > 0) {
+            openTabs(urls, false);
+          }
+        }
+        break;
+    }
+  });
+
+  // ============================================
+  // UTILITY FUNCTIONS
+  // ============================================
+
+  function getSelectableElements() {
+    const selectors = [
+      'a[href]',
+      'input[type="checkbox"]',
+      'input[type="radio"]',
+      'button',
+      '[role="button"]',
+      '[role="checkbox"]',
+      '[role="radio"]'
+    ];
+
+    return Array.from(document.querySelectorAll(selectors.join(', '))).filter(el => {
+      const style = window.getComputedStyle(el);
+      if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {
+        return false;
+      }
+
+      if (el.tagName === 'A') {
+        const href = el.getAttribute('href');
+        if (!href || href === '#' || href.startsWith('#') ||
+            href.startsWith('javascript:') || href.startsWith('mailto:') ||
+            href.startsWith('tel:')) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }
+
+  function getElementRect(el) {
+    const rect = el.getBoundingClientRect();
+    return {
+      left: rect.left,
+      top: rect.top,
+      right: rect.right,
+      bottom: rect.bottom,
+      width: rect.width,
+      height: rect.height
+    };
+  }
+
+  // FIXED: Simple intersection check - NO magnetic snapping
+  function rectsIntersect(r1, r2) {
+    return !(
+      r1.right < r2.left ||
+      r1.left > r2.right ||
+      r1.bottom < r2.top ||
+      r1.top > r2.bottom
+    );
+  }
+
+  // FIXED: Scroll-aware coordinate calculation
+  // Uses scroll delta to adjust start point WITHOUT mutating state.startX/Y
+  function getSelectionRect() {
+    // Calculate how much the page has scrolled since drag started
+    const scrollDeltaX = window.scrollX - state.startScrollX;
+    const scrollDeltaY = window.scrollY - state.startScrollY;
+
+    // Adjust the start point in viewport coordinates based on scroll delta
+    // If user scrolled DOWN, the start point moves UP in viewport space
+    const adjustedStartX = state.startX - scrollDeltaX;
+    const adjustedStartY = state.startY - scrollDeltaY;
+
+    const left = Math.min(adjustedStartX, state.currentX);
+    const top = Math.min(adjustedStartY, state.currentY);
+    const width = Math.abs(state.currentX - adjustedStartX);
+    const height = Math.abs(state.currentY - adjustedStartY);
+    return { left, top, right: left + width, bottom: top + height, width, height };
+  }
+
+  function getUniqueUrls() {
+    const urls = new Set();
+    state.selectedElements.forEach(el => {
+      if (el.tagName === 'A' && el.href) {
+        urls.add(el.href);
+      }
+    });
+    return Array.from(urls);
+  }
+
+  function getLinkTexts() {
+    const texts = [];
+    state.selectedElements.forEach(el => {
+      if (el.tagName === 'A') {
+        const text = el.textContent.trim();
+        if (text) texts.push(text);
+      }
+    });
+    return texts;
+  }
+
+  function getDownloadableUrls() {
+    const urls = [];
+    const downloadExtensions = /\.(pdf|zip|rar|7z|tar|gz|doc|docx|xls|xlsx|ppt|pptx|mp3|mp4|avi|mov|jpg|jpeg|png|gif|svg)$/i;
+
+    state.selectedElements.forEach(el => {
+      if (el.tagName === 'A' && el.href && downloadExtensions.test(el.href)) {
+        urls.push(el.href);
+      }
+    });
+    return urls;
+  }
+
+  // Categorize selected elements
+  function categorizeSelection() {
+    const result = {
+      links: [],
+      checkboxes: [],
+      radios: [],
+      buttons: []
+    };
+
+    state.selectedElements.forEach(el => {
+      if (el.tagName === 'A') {
+        result.links.push(el);
+      } else if (el.type === 'checkbox' || el.getAttribute('role') === 'checkbox') {
+        result.checkboxes.push(el);
+      } else if (el.type === 'radio' || el.getAttribute('role') === 'radio') {
+        result.radios.push(el);
+      } else {
+        result.buttons.push(el);
+      }
+    });
+
+    return result;
+  }
+
+  // ============================================
+  // UI CREATION
+  // ============================================
+
+  function createLasso() {
+    if (lassoEl) return lassoEl;
+    lassoEl = document.createElement('div');
+    lassoEl.className = 'snaplinkit-lasso';
+    lassoEl.style.display = 'none';
+    document.body.appendChild(lassoEl);
+    return lassoEl;
+  }
+
+  // FIXED: Exact 1:1 coordinate mapping
+  function updateLasso() {
+    if (!lassoEl) return;
+    const rect = getSelectionRect();
+    lassoEl.style.left = `${rect.left}px`;
+    lassoEl.style.top = `${rect.top}px`;
+    lassoEl.style.width = `${rect.width}px`;
+    lassoEl.style.height = `${rect.height}px`;
+  }
+
+  // Show menu ONLY for links
+  function showMenu(x, y) {
+    hideMenu();
+
+    const urls = getUniqueUrls();
+    if (urls.length === 0) return; // No links = no menu
+
+    const downloadUrls = getDownloadableUrls();
+
+    menuEl = document.createElement('div');
+    menuEl.className = 'snaplinkit-menu';
+
+    // Header
+    const header = document.createElement('div');
+    header.className = 'snaplinkit-menu-header';
+    header.innerHTML = `${urls.length} link${urls.length !== 1 ? 's' : ''} selected<br><small style="opacity:0.7;font-weight:normal">Alt+drag to remove, Shift+drag to add more</small>`;
+    menuEl.appendChild(header);
+
+    // Menu items for links only
+    const items = [
+      {
+        label: `Open ${urls.length} in New Tabs`,
+        icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>`,
+        action: () => openTabs(urls, false)
+      },
+      {
+        label: `Open ${urls.length} Unloaded`,
+        icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>`,
+        title: 'Memory saver: tabs appear but don\'t load until clicked',
+        action: () => openTabs(urls, true)
+      },
+      {
+        label: 'Copy URLs to Clipboard',
+        icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`,
+        action: () => copyToClipboard(urls.join('\n'), 'URLs copied!')
+      },
+      {
+        label: 'Copy Link Text',
+        icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>`,
+        action: () => copyToClipboard(getLinkTexts().join('\n'), 'Link text copied!')
+      }
+    ];
+
+    if (downloadUrls.length > 0) {
+      items.push({
+        label: `Download ${downloadUrls.length} File${downloadUrls.length !== 1 ? 's' : ''}`,
+        icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`,
+        action: () => downloadFiles(downloadUrls)
+      });
+    }
+
+    items.forEach(item => {
+      const btn = document.createElement('button');
+      btn.className = 'snaplinkit-menu-item';
+      btn.innerHTML = `${item.icon}<span>${item.label}</span>`;
+      if (item.title) {
+        btn.title = item.title;
+      }
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        hideMenu();
+        item.action();
+      });
+      menuEl.appendChild(btn);
+    });
+
+    document.body.appendChild(menuEl);
+
+    // Position menu within viewport
+    const menuRect = menuEl.getBoundingClientRect();
+    const viewWidth = window.innerWidth;
+    const viewHeight = window.innerHeight;
+
+    let menuX = x;
+    let menuY = y;
+
+    if (x + menuRect.width > viewWidth - 10) {
+      menuX = viewWidth - menuRect.width - 10;
+    }
+    if (y + menuRect.height > viewHeight - 10) {
+      menuY = viewHeight - menuRect.height - 10;
+    }
+
+    menuEl.style.left = `${Math.max(10, menuX)}px`;
+    menuEl.style.top = `${Math.max(10, menuY)}px`;
+
+    setTimeout(() => {
+      document.addEventListener('click', handleOutsideClick);
+      document.addEventListener('keydown', handleEscapeKey);
+    }, 10);
+  }
+
+  function hideMenu() {
+    if (menuEl) {
+      menuEl.remove();
+      menuEl = null;
+    }
+    document.removeEventListener('click', handleOutsideClick);
+    document.removeEventListener('keydown', handleEscapeKey);
+  }
+
+  function handleOutsideClick(e) {
+    if (menuEl && !menuEl.contains(e.target)) {
+      hideMenu();
+      // Don't clear selection on outside click - allows Alt+drag to remove items
+      // Selection will be cleared when user presses Escape or starts new selection without modifier
+    }
+  }
+
+  function handleEscapeKey(e) {
+    if (e.key === 'Escape') {
+      hideMenu();
+      clearSelection(); // Escape clears everything
+    }
+  }
+
+  function showConfirmDialog(count, onConfirm) {
+    const overlay = document.createElement('div');
+    overlay.className = 'snaplinkit-confirm-overlay';
+
+    const dialog = document.createElement('div');
+    dialog.className = 'snaplinkit-confirm';
+    dialog.innerHTML = `
+      <h3>Open ${count} tabs?</h3>
+      <p>You're about to open ${count} tabs at once. This might slow down your browser. Are you sure?</p>
+      <div class="snaplinkit-confirm-buttons">
+        <button class="snaplinkit-confirm-btn secondary" data-action="cancel">Cancel</button>
+        <button class="snaplinkit-confirm-btn primary" data-action="confirm">Open All</button>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+    document.body.appendChild(dialog);
+
+    const cleanup = () => {
+      overlay.remove();
+      dialog.remove();
+    };
+
+    dialog.querySelector('[data-action="cancel"]').addEventListener('click', cleanup);
+    dialog.querySelector('[data-action="confirm"]').addEventListener('click', () => {
+      cleanup();
+      onConfirm();
+    });
+    overlay.addEventListener('click', cleanup);
+  }
+
+  function showToast(message) {
+    const existing = document.querySelector('.snaplinkit-toast');
+    if (existing) existing.remove();
+
+    const toast = document.createElement('div');
+    toast.className = 'snaplinkit-toast';
+    toast.textContent = message;
+    document.body.appendChild(toast);
+
+    setTimeout(() => toast.remove(), 2500);
+  }
+
+  // ============================================
+  // ACTIONS
+  // ============================================
+
+  function openTabs(urls, discardAfterOpen = false) {
+    if (urls.length > settings.maxTabsWithoutConfirm) {
+      showConfirmDialog(urls.length, () => doOpenTabs(urls, discardAfterOpen));
+    } else {
+      doOpenTabs(urls, discardAfterOpen);
+    }
+  }
+
+  function doOpenTabs(urls, discardAfterOpen = false) {
+    browserAPI.runtime.sendMessage({
+      action: 'openTabs',
+      urls,
+      delay: settings.tabOpenDelay,
+      discardAfterOpen
+    });
+    const modeText = discardAfterOpen ? ' (unloaded)' : '';
+    showToast(`Opening ${urls.length} tab${urls.length !== 1 ? 's' : ''}${modeText}...`);
+    clearSelection();
+  }
+
+  function copyToClipboard(text, successMessage) {
+    navigator.clipboard.writeText(text).then(() => {
+      showToast(successMessage);
+    }).catch(() => {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      textarea.remove();
+      showToast(successMessage);
+    });
+    clearSelection();
+  }
+
+  function downloadFiles(urls) {
+    browserAPI.runtime.sendMessage({ action: 'downloadFiles', urls });
+    showToast(`Downloading ${urls.length} file${urls.length !== 1 ? 's' : ''}...`);
+    clearSelection();
+  }
+
+  // FIXED: Smart toggle - inverts based on majority state
+  function smartToggleCheckboxes(checkboxes) {
+    if (checkboxes.length === 0) return;
+
+    // Count how many are checked
+    let checkedCount = 0;
+    checkboxes.forEach(el => {
+      if (el.checked) checkedCount++;
+    });
+
+    // Determine majority: if most are checked, uncheck all; otherwise check all
+    const shouldCheck = checkedCount <= checkboxes.length / 2;
+
+    checkboxes.forEach(el => {
+      el.checked = shouldCheck;
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    showToast(shouldCheck ? `Checked ${checkboxes.length} items` : `Unchecked ${checkboxes.length} items`);
+    clearSelection();
+  }
+
+  // FIXED: Smart toggle for radios - select first unselected or cycle
+  function smartToggleRadios(radios) {
+    if (radios.length === 0) return;
+
+    // For radios, just select the first one in the selection
+    const firstRadio = radios[0];
+    firstRadio.checked = true;
+    firstRadio.dispatchEvent(new Event('change', { bubbles: true }));
+
+    showToast('Radio selected');
+    clearSelection();
+  }
+
+  // ============================================
+  // SELECTION LOGIC
+  // ============================================
+
+  // FIXED: No magnetic snapping - exact intersection only
+  function updateSelection() {
+    const selRect = getSelectionRect();
+    const elements = getSelectableElements();
+
+    const currentlyInLasso = new Set();
+
+    elements.forEach(el => {
+      const elRect = getElementRect(el);
+      // FIXED: No snap distance - exact intersection
+      if (rectsIntersect(selRect, elRect)) {
+        currentlyInLasso.add(el);
+      }
+    });
+
+    // Apply modifier logic
+    if (state.modifierMode === 'add') {
+      state.selectedElements = new Set([...state.persistentSelection, ...currentlyInLasso]);
+    } else if (state.modifierMode === 'remove') {
+      state.selectedElements = new Set(
+        [...state.persistentSelection].filter(el => !currentlyInLasso.has(el))
+      );
+    } else {
+      state.selectedElements = currentlyInLasso;
+    }
+
+    // Update visual highlights
+    document.querySelectorAll('.snaplinkit-highlighted').forEach(el => {
+      if (!state.selectedElements.has(el)) {
+        el.classList.remove('snaplinkit-highlighted');
+      }
+    });
+
+    state.selectedElements.forEach(el => {
+      el.classList.add('snaplinkit-highlighted');
+    });
+  }
+
+  function clearSelection() {
+    document.querySelectorAll('.snaplinkit-highlighted').forEach(el => {
+      el.classList.remove('snaplinkit-highlighted');
+    });
+    state.selectedElements.clear();
+    state.persistentSelection.clear();
+  }
+
+  // ============================================
+  // AUTO-SCROLL
+  // ============================================
+
+  function startAutoScroll() {
+    if (state.scrollInterval) return;
+
+    state.scrollInterval = setInterval(() => {
+      if (!state.isSelecting) {
+        stopAutoScroll();
+        return;
+      }
+
+      let scrollX = 0;
+      let scrollY = 0;
+
+      const { currentX, currentY } = state;
+      const { innerWidth, innerHeight } = window;
+
+      // Detect if cursor is near viewport edges - uses settings
+      if (currentX < settings.scrollEdgeThreshold) {
+        scrollX = -settings.autoScrollSpeed;
+      } else if (currentX > innerWidth - settings.scrollEdgeThreshold) {
+        scrollX = settings.autoScrollSpeed;
+      }
+
+      if (currentY < settings.scrollEdgeThreshold) {
+        scrollY = -settings.autoScrollSpeed;
+      } else if (currentY > innerHeight - settings.scrollEdgeThreshold) {
+        scrollY = settings.autoScrollSpeed;
+      }
+
+      if (scrollX !== 0 || scrollY !== 0) {
+        window.scrollBy(scrollX, scrollY);
+        // NO mutation of state.startX/startY - getSelectionRect() handles scroll delta
+        updateLasso();
+        updateSelection();
+      }
+    }, FRAME_INTERVAL);
+  }
+
+  function stopAutoScroll() {
+    if (state.scrollInterval) {
+      clearInterval(state.scrollInterval);
+      state.scrollInterval = null;
+    }
+  }
+
+  // ============================================
+  // EVENT HANDLERS
+  // ============================================
+
+  function onMouseDown(e) {
+    // Left-click clears selection (if not clicking on menu or selected elements)
+    if (e.button === 0) {
+      if (menuEl && !menuEl.contains(e.target)) {
+        hideMenu();
+        clearSelection();
+      } else if (!menuEl && state.selectedElements.size > 0) {
+        // Clear selection on left-click anywhere when no menu is open
+        clearSelection();
+      }
+      return;
+    }
+
+    // Right-click (button 2) triggers selection
+    if (e.button !== 2) return;
+    if (e.target.closest('input, textarea, select, button, [contenteditable]')) return;
+
+    // Close menu when starting new selection (but keep selection for modifier modes)
+    if (menuEl) {
+      hideMenu();
+    }
+
+    // Track potential drag start - don't activate until MIN_DRAG_DISTANCE
+    state.isSelecting = true;
+    state.isDragging = false; // Not dragging yet - waiting for threshold
+    state.startX = e.clientX;
+    state.startY = e.clientY;
+    state.startScrollX = window.scrollX;
+    state.startScrollY = window.scrollY;
+    state.currentX = e.clientX;
+    state.currentY = e.clientY;
+    state.modifierMode = e.shiftKey ? 'add' : (e.altKey ? 'remove' : null);
+
+    // Don't block context menu yet - only block if we actually drag
+    // blockNextContextMenu will be set to true in onMouseMove when drag threshold is reached
+    state.blockNextContextMenu = false;
+  }
+
+  function onMouseMove(e) {
+    if (!state.isSelecting) return;
+
+    state.currentX = e.clientX;
+    state.currentY = e.clientY;
+
+    // Check if we've reached the minimum drag distance
+    if (!state.isDragging) {
+      const dx = state.currentX - state.startX;
+      const dy = state.currentY - state.startY;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      if (distance < MIN_DRAG_DISTANCE) {
+        return; // Not dragging yet - allow normal click behavior
+      }
+
+      // Threshold reached - NOW activate selection mode
+      state.isDragging = true;
+      state.blockNextContextMenu = true; // Block context menu since we're dragging
+
+      // Set up modifier mode and persistent selection
+      if (state.modifierMode === 'add') {
+        state.persistentSelection = new Set(state.selectedElements);
+      } else if (state.modifierMode === 'remove') {
+        state.persistentSelection = new Set(state.selectedElements);
+      } else {
+        state.persistentSelection.clear();
+        clearSelection();
+      }
+
+      // Show lasso and activate selection
+      createLasso();
+      lassoEl.style.display = 'block';
+      lassoEl.classList.remove('add-mode', 'remove-mode');
+      if (state.modifierMode === 'add') {
+        lassoEl.classList.add('add-mode');
+      } else if (state.modifierMode === 'remove') {
+        lassoEl.classList.add('remove-mode');
+      }
+
+      document.body.classList.add('snaplinkit-selecting');
+      startAutoScroll();
+
+      // Now prevent default to stop text selection during drag
+      e.preventDefault();
+    }
+
+    updateLasso();
+    updateSelection();
+  }
+
+  function onMouseUp(e) {
+    if (!state.isSelecting) return;
+    if (e.button !== 2) return; // Right-click release
+
+    const wasDragging = state.isDragging;
+    state.isSelecting = false;
+    state.isDragging = false;
+    stopAutoScroll();
+
+    if (lassoEl) lassoEl.style.display = 'none';
+    document.body.classList.remove('snaplinkit-selecting');
+
+    // If we never reached drag threshold, this was a normal click - let it pass through
+    if (!wasDragging) {
+      return;
+    }
+
+    if (state.selectedElements.size === 0) {
+      clearSelection();
+      return;
+    }
+
+    // FIXED: Categorize and handle differently
+    const { links, checkboxes, radios, buttons } = categorizeSelection();
+
+    // Priority: If ONLY checkboxes/radios (no links), instant toggle
+    if (links.length === 0 && (checkboxes.length > 0 || radios.length > 0)) {
+      // Instant action - no menu
+      if (checkboxes.length > 0) {
+        smartToggleCheckboxes(checkboxes);
+      }
+      if (radios.length > 0) {
+        smartToggleRadios(radios);
+      }
+      return;
+    }
+
+    // If we have links, show the menu
+    if (links.length > 0) {
+      showMenu(e.clientX, e.clientY);
+    } else {
+      // Only buttons selected - clear
+      clearSelection();
+    }
+  }
+
+  function onKeyDown(e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'c' && state.selectedElements.size > 0) {
+      const urls = getUniqueUrls();
+      if (urls.length > 0) {
+        e.preventDefault();
+        copyToClipboard(urls.join('\n'), 'URLs copied!');
+      }
+    }
+
+    if (e.key === 'Escape') {
+      if (state.isSelecting) {
+        state.isSelecting = false;
+        stopAutoScroll();
+        if (lassoEl) lassoEl.style.display = 'none';
+        document.body.classList.remove('snaplinkit-selecting');
+      }
+      clearSelection();
+      hideMenu();
+    }
+  }
+
+  // ============================================
+  // EVENT LISTENER MANAGEMENT
+  // ============================================
+
+  function attachEventListeners() {
+    if (listenersAttached) return;
+
+    document.addEventListener('mousedown', onMouseDown, true);
+    document.addEventListener('mousemove', onMouseMove, true);
+    document.addEventListener('mouseup', onMouseUp, true);
+    document.addEventListener('keydown', onKeyDown, true);
+    document.addEventListener('dragstart', onDragStart, true);
+    document.addEventListener('contextmenu', onContextMenu, true);
+
+    listenersAttached = true;
+  }
+
+  function detachEventListeners() {
+    if (!listenersAttached) return;
+
+    document.removeEventListener('mousedown', onMouseDown, true);
+    document.removeEventListener('mousemove', onMouseMove, true);
+    document.removeEventListener('mouseup', onMouseUp, true);
+    document.removeEventListener('keydown', onKeyDown, true);
+    document.removeEventListener('dragstart', onDragStart, true);
+    document.removeEventListener('contextmenu', onContextMenu, true);
+
+    // Disconnect SPA observer to prevent memory leak
+    if (spaObserver) {
+      spaObserver.disconnect();
+      spaObserver = null;
+    }
+
+    listenersAttached = false;
+  }
+
+  function onDragStart(e) {
+    if (state.isSelecting) e.preventDefault();
+  }
+
+  function onContextMenu(e) {
+    // Block context menu if we initiated a right-click drag
+    // This flag is set in onMouseDown and persists until context menu fires
+    if (state.blockNextContextMenu) {
+      state.blockNextContextMenu = false;
+      e.preventDefault();
+      e.stopPropagation();
+      return false;
+    }
+  }
+
+  // ============================================
+  // INITIALIZATION
+  // ============================================
+
+  function init() {
+    attachEventListeners();
+
+    // SPA navigation detection
+    let lastUrl = location.href;
+    spaObserver = new MutationObserver(() => {
+      if (lastUrl !== location.href) {
+        lastUrl = location.href;
+        updateExtensionState();
+      }
+    });
+    spaObserver.observe(document.body, { childList: true, subtree: true });
+
+    // Back/forward navigation
+    window.addEventListener('popstate', updateExtensionState);
+  }
+
+  // Start by loading settings, which will then check blacklist and init
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', loadSettings);
+  } else {
+    loadSettings();
+  }
+
+})();

@@ -1,0 +1,8 @@
+xpi/
+*.xpi
+addon.json
+web-ext-lint.json
+web-ext-lint.txt
+GATE1_ORIENT.md
+REVIEW.md
+node_modules/

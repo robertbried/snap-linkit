@@ -1,0 +1,207 @@
+/**
+ * Snap Linkit - Styles
+ * Privacy 100% Guaranteed
+ *
+ * FIXED: Removed counter badge (was obstructing view)
+ */
+
+/* Selection Mode Cursor */
+.snaplinkit-selecting,
+.snaplinkit-selecting * {
+  cursor: crosshair !important;
+}
+
+/* Selection Rectangle - Dashed Purple */
+.snaplinkit-lasso {
+  position: fixed;
+  border: 2px dashed #bf00ff;
+  background-color: rgba(191, 0, 255, 0.2);
+  pointer-events: none;
+  z-index: 2147483646;
+  box-sizing: border-box;
+  border-radius: 2px;
+}
+
+/* Remove Mode Lasso - Red/Orange */
+.snaplinkit-lasso.remove-mode {
+  border-color: #ff4444;
+  background-color: rgba(255, 68, 68, 0.2);
+}
+
+/* Add Mode Lasso - Green */
+.snaplinkit-lasso.add-mode {
+  border-color: #00ff88;
+  background-color: rgba(0, 255, 136, 0.2);
+}
+
+/* Highlighted Elements */
+.snaplinkit-highlighted {
+  outline: 3px solid #bf00ff !important;
+  outline-offset: 2px !important;
+  background-color: rgba(191, 0, 255, 0.15) !important;
+  box-shadow: 0 0 8px rgba(191, 0, 255, 0.6) !important;
+  transition: all 0.08s ease-out !important;
+}
+
+/* Action Menu */
+.snaplinkit-menu {
+  position: fixed;
+  background: #1a1a2e;
+  border: 1px solid #bf00ff;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), 0 0 15px rgba(191, 0, 255, 0.3);
+  z-index: 2147483647;
+  min-width: 200px;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.snaplinkit-menu-header {
+  padding: 10px 14px;
+  background: linear-gradient(135deg, #bf00ff22, #8000ff22);
+  border-bottom: 1px solid #bf00ff44;
+  font-size: 12px;
+  color: #bf00ff;
+  font-weight: 600;
+}
+
+.snaplinkit-menu-item {
+  padding: 12px 14px;
+  color: #e0e0e0;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: background 0.15s;
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+}
+
+.snaplinkit-menu-item:hover {
+  background: rgba(191, 0, 255, 0.2);
+  color: white;
+}
+
+.snaplinkit-menu-item:active {
+  background: rgba(191, 0, 255, 0.35);
+}
+
+.snaplinkit-menu-item svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.snaplinkit-menu-divider {
+  height: 1px;
+  background: #bf00ff33;
+  margin: 4px 0;
+}
+
+/* Confirmation Dialog */
+.snaplinkit-confirm {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: #1a1a2e;
+  border: 2px solid #bf00ff;
+  border-radius: 12px;
+  padding: 24px;
+  z-index: 2147483647;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  text-align: center;
+  max-width: 400px;
+}
+
+.snaplinkit-confirm-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 2147483646;
+}
+
+.snaplinkit-confirm h3 {
+  color: #fff;
+  margin: 0 0 12px 0;
+  font-size: 18px;
+}
+
+.snaplinkit-confirm p {
+  color: #aaa;
+  margin: 0 0 20px 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.snaplinkit-confirm-buttons {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.snaplinkit-confirm-btn {
+  padding: 10px 24px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: all 0.15s;
+}
+
+.snaplinkit-confirm-btn.primary {
+  background: linear-gradient(135deg, #bf00ff, #8000ff);
+  color: white;
+}
+
+.snaplinkit-confirm-btn.primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(191, 0, 255, 0.4);
+}
+
+.snaplinkit-confirm-btn.secondary {
+  background: #333;
+  color: #ccc;
+}
+
+.snaplinkit-confirm-btn.secondary:hover {
+  background: #444;
+  color: white;
+}
+
+/* Toast Notification */
+.snaplinkit-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1a1a2e;
+  border: 1px solid #bf00ff;
+  color: white;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px;
+  z-index: 2147483647;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  animation: snaplinkit-toast-in 0.3s ease-out;
+}
+
+@keyframes snaplinkit-toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
