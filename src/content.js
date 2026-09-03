@@ -213,7 +213,11 @@
         return false;
       }
 
-      if (el.tagName === 'A') {
+      // SVG <a> elements also match a[href] but carry an SVGAnimatedString href
+      // the rest of this script cannot act on; leave them out of the selection
+      if (el.localName === 'a' && !(el instanceof HTMLAnchorElement)) return false;
+
+      if (el instanceof HTMLAnchorElement) {
         // Skip same-page fragment links, then anything the browser cannot open
         const raw = (el.getAttribute('href') || '').trim();
         if (!raw || raw.startsWith('#')) return false;
@@ -268,7 +272,7 @@
   function getUniqueUrls() {
     const urls = new Set();
     state.selectedElements.forEach(el => {
-      if (el.tagName === 'A' && isOpenableUrl(el.href)) {
+      if (el instanceof HTMLAnchorElement && isOpenableUrl(el.href)) {
         urls.add(el.href);
       }
     });
@@ -278,7 +282,7 @@
   function getLinkTexts() {
     const texts = [];
     state.selectedElements.forEach(el => {
-      if (el.tagName === 'A') {
+      if (el instanceof HTMLAnchorElement) {
         const text = el.textContent.trim();
         if (text) texts.push(text);
       }
@@ -291,7 +295,7 @@
     const downloadExtensions = /\.(pdf|zip|rar|7z|tar|gz|doc|docx|xls|xlsx|ppt|pptx|mp3|mp4|avi|mov|jpg|jpeg|png|gif|svg)$/i;
 
     state.selectedElements.forEach(el => {
-      if (el.tagName === 'A' && isOpenableUrl(el.href) && downloadExtensions.test(el.href)) {
+      if (el instanceof HTMLAnchorElement && isOpenableUrl(el.href) && downloadExtensions.test(el.href)) {
         urls.push(el.href);
       }
     });
@@ -308,7 +312,7 @@
     };
 
     state.selectedElements.forEach(el => {
-      if (el.tagName === 'A') {
+      if (el instanceof HTMLAnchorElement) {
         result.links.push(el);
       } else if (el.type === 'checkbox' || el.getAttribute('role') === 'checkbox') {
         result.checkboxes.push(el);
