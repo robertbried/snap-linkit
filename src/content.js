@@ -73,25 +73,16 @@
   // SETTINGS LOADER
   // ============================================
 
-  // Load settings from storage (sync with local fallback)
-  function loadSettings() {
-    browserAPI.storage.sync.get(DEFAULTS, (syncStored) => {
-      if (browserAPI.runtime.lastError) {
-        // Sync failed, try local
-        browserAPI.storage.local.get(DEFAULTS, (localStored) => {
-          settings = { ...DEFAULTS, ...localStored };
-          checkBlacklistAndInit();
-        });
-        return;
-      }
-
-      // Also check local storage for fallback data (in case sync quota was exceeded)
-      browserAPI.storage.local.get(null, (localStored) => {
-        // Merge: sync takes priority, but local fills gaps
-        settings = { ...DEFAULTS, ...localStored, ...syncStored };
-        checkBlacklistAndInit();
-      });
-    });
+  // Load settings from storage.sync, the single source of truth: the popup
+  // writes there and reports any failed save to the user.
+  async function loadSettings() {
+    try {
+      const stored = await browserAPI.storage.sync.get(SnapLinkitDefaults());
+      settings = { ...SnapLinkitDefaults(), ...stored };
+    } catch (e) {
+      settings = SnapLinkitDefaults();
+    }
+    checkBlacklistAndInit();
   }
 
   // Listen for live settings updates
@@ -100,7 +91,8 @@
 
     Object.keys(changes).forEach(key => {
       if (key in settings) {
-        settings[key] = changes[key].newValue;
+        // A removed key reverts to its default rather than becoming undefined
+        settings[key] = changes[key].newValue ?? SnapLinkitDefaults()[key];
       }
     });
 
@@ -176,9 +168,11 @@
     switch (message.action) {
       case 'toggle-extension':
         settings.extensionEnabled = !settings.extensionEnabled;
-        browserAPI.storage.sync.set({ extensionEnabled: settings.extensionEnabled });
         updateExtensionState();
         showToast(settings.extensionEnabled ? 'Snap Linkit enabled' : 'Snap Linkit disabled');
+        // Persist so other tabs follow; this tab has already switched
+        Promise.resolve(browserAPI.storage.sync.set({ extensionEnabled: settings.extensionEnabled }))
+          .catch(() => showToast('Snap Linkit: could not save the on/off state'));
         break;
 
       case 'open-selected-tabs':

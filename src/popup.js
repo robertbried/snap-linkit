@@ -60,29 +60,16 @@
     elements.saveIndicator = document.getElementById('saveIndicator');
   }
 
+  // storage.sync is the single source of truth (content.js reads only it).
   async function loadSettings() {
-    return new Promise((resolve) => {
-      try {
-        browserAPI.storage.sync.get(DEFAULTS, (stored) => {
-          if (browserAPI.runtime.lastError) {
-            console.warn('[Snap Linkit] Storage error:', browserAPI.runtime.lastError.message);
-            // Try local storage as fallback
-            browserAPI.storage.local.get(DEFAULTS, (localStored) => {
-              currentSettings = { ...DEFAULTS, ...localStored };
-              resolve();
-            });
-            return;
-          }
-          currentSettings = { ...DEFAULTS, ...stored };
-          resolve();
-        });
-      } catch (e) {
-        // Extension context invalidated - use defaults
-        console.warn('[Snap Linkit] Extension context error:', e.message);
-        currentSettings = SnapLinkitDefaults();
-        resolve();
-      }
-    });
+    try {
+      const stored = await browserAPI.storage.sync.get(SnapLinkitDefaults());
+      currentSettings = { ...SnapLinkitDefaults(), ...stored };
+    } catch (e) {
+      // Storage unavailable (e.g. extension context invalidated) - use defaults
+      console.warn('[Snap Linkit] Storage error:', e.message);
+      currentSettings = SnapLinkitDefaults();
+    }
   }
 
   async function saveSettings() {
@@ -90,14 +77,7 @@
       await browserAPI.storage.sync.set(currentSettings);
       showSaveIndicator();
     } catch (error) {
-      // Fallback to local storage if sync quota exceeded
-      if (error.message?.includes('QUOTA_BYTES')) {
-        console.warn('[Snap Linkit] Sync quota exceeded, using local storage');
-        await browserAPI.storage.local.set(currentSettings);
-        showSaveIndicator();
-      } else {
-        console.error('[Snap Linkit] Save error:', error);
-      }
+      console.error('[Snap Linkit] Save error:', error);
     }
   }
 
@@ -215,6 +195,13 @@
   }
 
   const MAX_BLACKLIST_ENTRIES = 100;
+  // storage.sync refuses items over 8 KB (QUOTA_BYTES_PER_ITEM). Keep the
+  // serialized list well below that so a save can never be rejected.
+  const MAX_BLACKLIST_BYTES = 6144;
+
+  function blacklistBytes(list) {
+    return new TextEncoder().encode(JSON.stringify(list)).length;
+  }
 
   function addToBlacklist() {
     const input = elements.blacklistInput;
@@ -223,9 +210,13 @@
     const pattern = input.value.trim().toLowerCase();
     if (!pattern) return;
 
-    // Check for size limit
+    // Check for size limits
     if (currentSettings.blacklist.length >= MAX_BLACKLIST_ENTRIES) {
       showInputError(input, `Maximum ${MAX_BLACKLIST_ENTRIES} entries allowed`);
+      return;
+    }
+    if (blacklistBytes([...currentSettings.blacklist, pattern]) > MAX_BLACKLIST_BYTES) {
+      showInputError(input, 'Site list is full (sync storage limit)');
       return;
     }
 
