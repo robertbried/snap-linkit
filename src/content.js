@@ -283,7 +283,8 @@
     const texts = [];
     state.selectedElements.forEach(el => {
       if (el instanceof HTMLAnchorElement) {
-        const text = el.textContent.trim();
+        // One line per link: collapse embedded newlines and whitespace runs
+        const text = el.textContent.replace(/\s+/g, ' ').trim();
         if (text) texts.push(text);
       }
     });
