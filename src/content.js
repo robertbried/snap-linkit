@@ -332,7 +332,8 @@
   // ============================================
 
   function createLasso() {
-    if (lassoEl) return lassoEl;
+    if (lassoEl && lassoEl.isConnected) return lassoEl;
+    if (lassoEl) lassoEl.remove(); // body was replaced; rebuild
     lassoEl = document.createElement('div');
     lassoEl.className = 'snaplinkit-lasso';
     lassoEl.style.display = 'none';
@@ -895,10 +896,16 @@
   // arrive via storage.onChanged, so no URL watcher is needed.
 
   // Start by loading settings, which will then check blacklist and attach listeners
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', loadSettings);
-  } else {
+  function start() {
+    // XML/SVG documents have no <body> to attach UI to
+    if (!document.body) return;
     loadSettings();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', start);
+  } else {
+    start();
   }
 
 })();
