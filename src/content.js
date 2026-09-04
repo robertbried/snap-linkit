@@ -101,17 +101,34 @@
   // BLACKLIST / WHITELIST
   // ============================================
 
+  // Site-list matching on lowercased strings.
+  //   "*.example.com"  matches example.com and any subdomain (a.example.com,
+  //                    a.b.example.com) but not notexample.com or example.com.evil.net
+  //   "example.com"    matches exactly that host
+  //   other wildcards  ("mail.*.com") keep the original regex semantics
+  // IDN: the popup accepts ASCII only, so patterns are entered as punycode, and
+  // location.hostname is punycode too, so plain comparison is correct.
   function matchesPattern(hostname, pattern) {
-    // Convert wildcard pattern to regex
-    // *.google.com matches mail.google.com, www.google.com, etc.
-    // First, escape backslashes, then escape other regex special chars, then convert * to .*
-    const escaped = pattern
-      .replace(/\\/g, '\\\\')           // Escape backslashes first
-      .replace(/[.+?^${}()|[\]]/g, '\\$&')  // Escape regex special chars (except *)
-      .replace(/\*/g, '.*');            // Convert wildcards to regex
-    const regexStr = '^' + escaped + '$';
+    const host = String(hostname || '').toLowerCase();
+    const pat = String(pattern || '').toLowerCase();
+    if (!pat) return false;
+
+    if (pat.startsWith('*.') && !pat.slice(2).includes('*')) {
+      const base = pat.slice(2);
+      return host === base || host.endsWith('.' + base);
+    }
+
+    if (!pat.includes('*')) {
+      return host === pat;
+    }
+
+    // Remaining wildcard forms: escape regex specials (except *), then * -> .*
+    const escaped = pat
+      .replace(/\\/g, '\\\\')
+      .replace(/[.+?^${}()|[\]]/g, '\\$&')
+      .replace(/\*/g, '.*');
     try {
-      return new RegExp(regexStr, 'i').test(hostname);
+      return new RegExp('^' + escaped + '$').test(host);
     } catch (e) {
       return false;
     }
