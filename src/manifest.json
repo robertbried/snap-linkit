@@ -37,7 +37,7 @@
         "default": "Alt+Shift+S",
         "mac": "Alt+Shift+S"
       },
-      "description": "Toggle Snap Linkit on/off for current tab"
+      "description": "Toggle Snap Linkit on/off (applies to all tabs)"
     },
     "open-selected-tabs": {
       "suggested_key": {

@@ -44,6 +44,13 @@
     });
   });
 
+  // Keep the toggle honest if Alt+Shift+S flips the setting while the popup is open
+  browserAPI.storage.onChanged.addListener((changes, area) => {
+    if (area !== 'sync' || !('extensionEnabled' in changes) || !elements.extensionEnabled) return;
+    currentSettings.extensionEnabled = changes.extensionEnabled.newValue !== false;
+    elements.extensionEnabled.checked = currentSettings.extensionEnabled;
+  });
+
   function cacheElements() {
     // Sliders
     elements.scrollEdgeThreshold = document.getElementById('scrollEdgeThreshold');
@@ -59,6 +66,9 @@
 
     // Blacklist
     elements.blacklistMode = document.getElementById('blacklistMode');
+
+    // On/off toggle
+    elements.extensionEnabled = document.getElementById('extensionEnabled');
     elements.blacklistInput = document.getElementById('blacklistInput');
     elements.blacklistList = document.getElementById('blacklistList');
     elements.addBlacklistBtn = document.getElementById('addBlacklistBtn');
@@ -119,6 +129,14 @@
       }
     });
 
+    // On/off toggle (the same setting the Alt+Shift+S command flips; global)
+    if (elements.extensionEnabled) {
+      elements.extensionEnabled.addEventListener('change', (e) => {
+        currentSettings.extensionEnabled = e.target.checked;
+        saveSettings();
+      });
+    }
+
     // Blacklist mode dropdown
     if (elements.blacklistMode) {
       elements.blacklistMode.addEventListener('change', (e) => {
@@ -155,6 +173,11 @@
         elements[`${id}Value`].textContent = currentSettings[id];
       }
     });
+
+    // On/off toggle
+    if (elements.extensionEnabled) {
+      elements.extensionEnabled.checked = currentSettings.extensionEnabled !== false;
+    }
 
     // Update blacklist mode
     if (elements.blacklistMode) {
