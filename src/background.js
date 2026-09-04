@@ -5,6 +5,9 @@
 
 const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
 
+// Pure helpers live in lib/helpers.js (loaded first by the manifest)
+const { isOpenableUrl, filenameFromUrl } = globalThis.SnapLinkitLib;
+
 // ============================================
 // KEYBOARD SHORTCUT HANDLER
 // ============================================
@@ -58,20 +61,6 @@ browserAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
  */
 function canDiscardTabs() {
   return typeof browserAPI.tabs.discard === 'function';
-}
-
-/**
- * Only http(s) URLs can be opened by tabs.create / downloads.download
- * (and only those can be discarded). Mirrors isOpenableUrl in content.js;
- * re-checked here so the background never trusts message payloads.
- */
-const OPENABLE_PROTOCOLS = new Set(['http:', 'https:']);
-function isOpenableUrl(url) {
-  try {
-    return typeof url === 'string' && OPENABLE_PROTOCOLS.has(new URL(url).protocol);
-  } catch (e) {
-    return false;
-  }
 }
 
 /**
@@ -184,30 +173,6 @@ function discardTabsWhenReady(tabIds) {
       clearTimeout(timeout);
     }
   }, TIMEOUT_MS + 1000);
-}
-
-/**
- * Derive a download filename from the URL path: last path segment,
- * percent-decoded, with characters the downloads API rejects replaced and
- * leading dots stripped. Falls back to "download" for paths ending in "/".
- */
-function filenameFromUrl(url) {
-  let segment = '';
-  try {
-    segment = new URL(url).pathname.split('/').pop() || '';
-  } catch (e) {
-    return 'download';
-  }
-  try {
-    segment = decodeURIComponent(segment);
-  } catch (e) {
-    // Malformed escape sequence: keep the encoded form
-  }
-  const cleaned = segment
-    .replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_')
-    .replace(/^\.+/, '')
-    .trim();
-  return cleaned || 'download';
 }
 
 /**

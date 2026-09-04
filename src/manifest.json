@@ -28,6 +28,7 @@
   },
   "background": {
     "scripts": [
+      "lib/helpers.js",
       "background.js"
     ]
   },
@@ -55,6 +56,7 @@
       ],
       "js": [
         "defaults.js",
+        "lib/helpers.js",
         "content.js"
       ],
       "css": [

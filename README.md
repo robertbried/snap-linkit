@@ -52,7 +52,8 @@ The extension makes no network requests; the source contains no fetch, XMLHttpRe
 There is no build step; `src/` is the extension.
 
 1. Open `about:debugging` in Firefox, choose "This Firefox", then "Load Temporary Add-on…" and pick `src/manifest.json`.
-2. Lint before submitting: `npx web-ext lint --source-dir src`.
+2. Run the unit tests: `npm test`.
+3. Lint before submitting: `npx web-ext lint --source-dir src`.
 
 ## License
 

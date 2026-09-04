@@ -1,0 +1,8 @@
+{
+  "name": "snap-linkit",
+  "private": true,
+  "scripts": {
+    "test": "node --test \"test/**/*.test.js\"",
+    "lint": "npx --yes web-ext lint --source-dir src --no-input"
+  }
+}

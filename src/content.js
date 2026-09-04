@@ -6,6 +6,12 @@
 (function() {
   'use strict';
 
+  // Pure helpers live in lib/helpers.js (loaded first by the manifest)
+  const {
+    isOpenableUrl, matchesPattern, rectsIntersect, selectionRect,
+    isDownloadableUrl, majorityShouldCheck, plural
+  } = globalThis.SnapLinkitLib;
+
   // ============================================
   // SETTINGS
   // ============================================
@@ -51,19 +57,6 @@
   // ============================================
   const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
 
-  // Only http(s) URLs can be opened by tabs.create or fetched by
-  // downloads.download; javascript:, data:, blob:, file:, about: and
-  // friends are rejected by the browser. Checked on the resolved URL so
-  // case and whitespace variants of the attribute are covered.
-  const OPENABLE_PROTOCOLS = new Set(['http:', 'https:']);
-  function isOpenableUrl(url) {
-    try {
-      return OPENABLE_PROTOCOLS.has(new URL(url).protocol);
-    } catch (e) {
-      return false;
-    }
-  }
-
   // ============================================
   // SETTINGS LOADER
   // ============================================
@@ -100,39 +93,6 @@
   // ============================================
   // BLACKLIST / WHITELIST
   // ============================================
-
-  // Site-list matching on lowercased strings.
-  //   "*.example.com"  matches example.com and any subdomain (a.example.com,
-  //                    a.b.example.com) but not notexample.com or example.com.evil.net
-  //   "example.com"    matches exactly that host
-  //   other wildcards  ("mail.*.com") keep the original regex semantics
-  // IDN: the popup accepts ASCII only, so patterns are entered as punycode, and
-  // location.hostname is punycode too, so plain comparison is correct.
-  function matchesPattern(hostname, pattern) {
-    const host = String(hostname || '').toLowerCase();
-    const pat = String(pattern || '').toLowerCase();
-    if (!pat) return false;
-
-    if (pat.startsWith('*.') && !pat.slice(2).includes('*')) {
-      const base = pat.slice(2);
-      return host === base || host.endsWith('.' + base);
-    }
-
-    if (!pat.includes('*')) {
-      return host === pat;
-    }
-
-    // Remaining wildcard forms: escape regex specials (except *), then * -> .*
-    const escaped = pat
-      .replace(/\\/g, '\\\\')
-      .replace(/[.+?^${}()|[\]]/g, '\\$&')
-      .replace(/\*/g, '.*');
-    try {
-      return new RegExp('^' + escaped + '$').test(host);
-    } catch (e) {
-      return false;
-    }
-  }
 
   function isOnList(hostname) {
     const patterns = settings.blacklist || [];
@@ -246,33 +206,13 @@
     };
   }
 
-  // Axis-aligned rectangle intersection (no snapping tolerance)
-  function rectsIntersect(r1, r2) {
-    return !(
-      r1.right < r2.left ||
-      r1.left > r2.right ||
-      r1.bottom < r2.top ||
-      r1.top > r2.bottom
-    );
-  }
-
-  // Scroll-aware coordinate calculation
-  // Uses scroll delta to adjust start point WITHOUT mutating state.startX/Y
+  // Scroll-aware selection rectangle (pure core: selectionRect in lib/helpers.js)
   function getSelectionRect() {
-    // Calculate how much the page has scrolled since drag started
-    const scrollDeltaX = window.scrollX - state.startScrollX;
-    const scrollDeltaY = window.scrollY - state.startScrollY;
-
-    // Adjust the start point in viewport coordinates based on scroll delta
-    // If user scrolled DOWN, the start point moves UP in viewport space
-    const adjustedStartX = state.startX - scrollDeltaX;
-    const adjustedStartY = state.startY - scrollDeltaY;
-
-    const left = Math.min(adjustedStartX, state.currentX);
-    const top = Math.min(adjustedStartY, state.currentY);
-    const width = Math.abs(state.currentX - adjustedStartX);
-    const height = Math.abs(state.currentY - adjustedStartY);
-    return { left, top, right: left + width, bottom: top + height, width, height };
+    return selectionRect(
+      { x: state.startX, y: state.startY, scrollX: state.startScrollX, scrollY: state.startScrollY },
+      { x: state.currentX, y: state.currentY },
+      { x: window.scrollX, y: window.scrollY }
+    );
   }
 
   function getUniqueUrls() {
@@ -299,10 +239,9 @@
 
   function getDownloadableUrls() {
     const urls = [];
-    const downloadExtensions = /\.(pdf|zip|rar|7z|tar|gz|doc|docx|xls|xlsx|ppt|pptx|mp3|mp4|avi|mov|jpg|jpeg|png|gif|svg)$/i;
 
     state.selectedElements.forEach(el => {
-      if (el instanceof HTMLAnchorElement && isOpenableUrl(el.href) && downloadExtensions.test(el.href)) {
+      if (el instanceof HTMLAnchorElement && isOpenableUrl(el.href) && isDownloadableUrl(el.href)) {
         urls.push(el.href);
       }
     });
@@ -592,10 +531,6 @@
     }
   }
 
-  function plural(count, noun) {
-    return `${count} ${noun}${count !== 1 ? 's' : ''}`;
-  }
-
   async function doOpenTabs(urls, discardAfterOpen = false) {
     const modeText = discardAfterOpen ? ' (unloaded)' : '';
     showToast(`Opening ${plural(urls.length, 'tab')}${modeText}...`);
@@ -714,7 +649,7 @@
 
     // Determine majority: if most are checked, uncheck all; otherwise check all
     const checkedCount = checkboxes.filter(isChecked).length;
-    const shouldCheck = checkedCount <= checkboxes.length / 2;
+    const shouldCheck = majorityShouldCheck(checkedCount, checkboxes.length);
 
     const result = clickToState(checkboxes, shouldCheck);
     const verb = shouldCheck ? 'Checked' : 'Unchecked';
