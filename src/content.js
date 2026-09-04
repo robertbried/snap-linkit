@@ -663,25 +663,67 @@
     }
   }
 
+  // ---- Checkbox / radio toggling ----
+  // Elements are flipped with a native click() rather than by setting .checked
+  // and dispatching a synthetic change event: frameworks only update their own
+  // state for real clicks (React listens to click, Vue/Angular to input), and
+  // ARIA widgets (role="checkbox"/"radio") flip aria-checked in their own click
+  // handlers. Only elements whose state differs from the target are clicked.
+
+  function isChecked(el) {
+    return el instanceof HTMLInputElement
+      ? el.checked === true
+      : el.getAttribute('aria-checked') === 'true';
+  }
+
+  function isDisabled(el) {
+    return el.disabled === true || el.getAttribute('aria-disabled') === 'true';
+  }
+
+  // Click every element whose state differs from `target`. A click() that
+  // throws is logged and counted; the loop continues with the next element.
+  function clickToState(elements, target) {
+    const result = { clicked: 0, skipped: 0, failed: 0 };
+    for (const el of elements) {
+      if (isDisabled(el)) {
+        result.skipped++;
+        continue;
+      }
+      if (isChecked(el) === target) continue;
+      try {
+        el.click();
+        result.clicked++;
+      } catch (error) {
+        result.failed++;
+        console.warn('[Snap Linkit] Could not toggle element:', el, error);
+      }
+    }
+    return result;
+  }
+
+  function toggleNotes(result) {
+    const notes = [];
+    if (result.skipped > 0) notes.push(`${result.skipped} disabled skipped`);
+    if (result.failed > 0) notes.push(`${result.failed} failed`);
+    return notes.length > 0 ? ` (${notes.join(', ')})` : '';
+  }
+
   // Smart toggle - inverts based on majority state
   function smartToggleCheckboxes(checkboxes) {
     if (checkboxes.length === 0) return;
 
-    // Count how many are checked
-    let checkedCount = 0;
-    checkboxes.forEach(el => {
-      if (el.checked) checkedCount++;
-    });
-
     // Determine majority: if most are checked, uncheck all; otherwise check all
+    const checkedCount = checkboxes.filter(isChecked).length;
     const shouldCheck = checkedCount <= checkboxes.length / 2;
 
-    checkboxes.forEach(el => {
-      el.checked = shouldCheck;
-      el.dispatchEvent(new Event('change', { bubbles: true }));
-    });
-
-    showToast(shouldCheck ? `Checked ${checkboxes.length} items` : `Unchecked ${checkboxes.length} items`);
+    const result = clickToState(checkboxes, shouldCheck);
+    const verb = shouldCheck ? 'Checked' : 'Unchecked';
+    const total = checkboxes.length;
+    const affected = total - result.skipped - result.failed;
+    const head = result.skipped + result.failed > 0
+      ? `${verb} ${affected} of ${total} items`
+      : `${verb} ${total} items`;
+    showToast(head + toggleNotes(result));
     clearSelection();
   }
 
@@ -689,12 +731,11 @@
   function smartToggleRadios(radios) {
     if (radios.length === 0) return;
 
-    // For radios, just select the first one in the selection
-    const firstRadio = radios[0];
-    firstRadio.checked = true;
-    firstRadio.dispatchEvent(new Event('change', { bubbles: true }));
-
-    showToast('Radio selected');
+    const result = clickToState([radios[0]], true);
+    let message = 'Radio selected';
+    if (result.skipped > 0) message = 'Radio is disabled, not changed';
+    else if (result.failed > 0) message = 'Radio could not be selected';
+    showToast(message);
     clearSelection();
   }
 
