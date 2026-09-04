@@ -4,7 +4,7 @@ Select and manage multiple links, checkboxes, and buttons with a simple drag.
 
 ## Install
 
-Firefox only, version 109 or newer. Install from addons.mozilla.org:
+Firefox only, version 142 or newer. Install from addons.mozilla.org:
 https://addons.mozilla.org/en-US/firefox/addon/snap-linkit/
 
 ## How it works
