@@ -37,6 +37,8 @@
     bindEvents();
     updateUI();
     showVersion();
+    watchHostAccess();
+    checkHostAccess();
 
     // Flush a pending debounced save if the popup closes mid-drag
     window.addEventListener('pagehide', () => {
@@ -77,6 +79,10 @@
     elements.resetBtn = document.getElementById('resetBtn');
     elements.saveIndicator = document.getElementById('saveIndicator');
     elements.privacyLink = document.getElementById('privacyLink');
+
+    // Host-permission banner
+    elements.permissionBanner = document.getElementById('permissionBanner');
+    elements.grantAccessBtn = document.getElementById('grantAccessBtn');
   }
 
   // storage.sync is the single source of truth (content.js reads only it).
@@ -185,6 +191,11 @@
     if (elements.privacyLink) {
       elements.privacyLink.addEventListener('click', openPrivacyPolicy);
     }
+
+    // "Grant access" in the host-permission banner
+    if (elements.grantAccessBtn) {
+      elements.grantAccessBtn.addEventListener('click', requestHostAccess);
+    }
   }
 
   function updateUI() {
@@ -212,6 +223,63 @@
 
     // Render blacklist
     renderBlacklist();
+  }
+
+  // ---- Host access (site permission) ----
+  // Firefox lets users revoke host permissions at any time; without them the
+  // content script never runs and nothing else in the UI would say why.
+  // permissions.* needs no manifest entry; the origins must match
+  // host_permissions in manifest.json.
+  const HOST_ORIGINS = ['http://*/*', 'https://*/*'];
+
+  function permissionsApi() {
+    const api = browserAPI.permissions;
+    return api && typeof api.contains === 'function' && typeof api.request === 'function' ? api : null;
+  }
+
+  async function checkHostAccess() {
+    const api = permissionsApi();
+    if (!api || !elements.permissionBanner) return;
+    try {
+      const granted = await api.contains({ origins: HOST_ORIGINS });
+      elements.permissionBanner.hidden = granted === true;
+    } catch (error) {
+      // Cannot tell: show the banner rather than hide a possible problem
+      console.error('[Snap Linkit] permissions.contains failed:', error);
+      elements.permissionBanner.hidden = false;
+    }
+  }
+
+  async function requestHostAccess() {
+    const api = permissionsApi();
+    if (!api || !elements.permissionBanner) return;
+    let granted = false;
+    try {
+      // Called straight from the click, before any await, so the user gesture is still live
+      granted = await api.request({ origins: HOST_ORIGINS });
+    } catch (error) {
+      console.error('[Snap Linkit] permissions.request failed:', error);
+      granted = false;
+    }
+    if (granted === true) {
+      elements.permissionBanner.hidden = true;
+      // Content scripts do not inject into pages that are already loaded
+      showIndicator('Access granted \u2014 reload open tabs', false, 2500);
+    } else {
+      elements.permissionBanner.hidden = false;
+      showIndicator('Access was not granted', true, 2500);
+    }
+  }
+
+  // Keep the banner in step with grants/revocations made while the popup is open
+  function watchHostAccess() {
+    const api = permissionsApi();
+    if (!api) return;
+    for (const event of [api.onAdded, api.onRemoved]) {
+      if (event && typeof event.addListener === 'function') {
+        event.addListener(checkHostAccess);
+      }
+    }
   }
 
   function showVersion() {

@@ -65,6 +65,23 @@
       border-bottom: 1px solid #bf00ff33;
     }
 
+    /* Host-permission banner: shown when access to websites is missing or revoked */
+    .permission-banner {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      background: #2a2a3e;
+      border-bottom: 1px solid #ff4444;
+      color: #ff4444;
+      font-size: 11px;
+    }
+
+    .permission-banner[hidden] {
+      display: none;
+    }
+
     .tab-label {
       flex: 1;
       padding: 8px;
@@ -558,6 +575,12 @@
       <h1>Snap Linkit</h1>
     </div>
     <p class="tagline">Select &bull; Manage &bull; Act</p>
+  </div>
+
+  <!-- Host-permission banner (hidden unless popup.js finds site access missing) -->
+  <div class="permission-banner" id="permissionBanner" hidden>
+    <span>Snap Linkit needs access to websites to work.</span>
+    <button class="add-btn" id="grantAccessBtn">Grant access</button>
   </div>
 
   <!-- Tab Labels -->
