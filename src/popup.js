@@ -76,6 +76,7 @@
     // Actions
     elements.resetBtn = document.getElementById('resetBtn');
     elements.saveIndicator = document.getElementById('saveIndicator');
+    elements.privacyLink = document.getElementById('privacyLink');
   }
 
   // storage.sync is the single source of truth (content.js reads only it).
@@ -100,16 +101,35 @@
     }
   }
 
-  let saveIndicatorTimer = null;
+  let indicatorTimer = null;
 
-  function showSaveIndicator(saved = true) {
+  // Transient status badge (top-right); errors show in red for longer
+  function showIndicator(text, isError, durationMs) {
     const indicator = elements.saveIndicator;
     if (!indicator) return;
-    indicator.textContent = saved ? 'Saved!' : 'Save failed';
-    indicator.classList.toggle('error', !saved);
+    indicator.textContent = text;
+    indicator.classList.toggle('error', isError);
     indicator.classList.add('visible');
-    clearTimeout(saveIndicatorTimer);
-    saveIndicatorTimer = setTimeout(() => indicator.classList.remove('visible'), saved ? 1000 : 2500);
+    clearTimeout(indicatorTimer);
+    indicatorTimer = setTimeout(() => indicator.classList.remove('visible'), durationMs);
+  }
+
+  function showSaveIndicator(saved = true) {
+    showIndicator(saved ? 'Saved!' : 'Save failed', !saved, saved ? 1000 : 2500);
+  }
+
+  // A link inside a browser-action popup would navigate the popup itself,
+  // so open the bundled page in a tab and close the popup. Needs no
+  // permission: tabs.create and runtime.getURL are always available.
+  async function openPrivacyPolicy(e) {
+    e.preventDefault();
+    try {
+      await browserAPI.tabs.create({ url: browserAPI.runtime.getURL('privacy-policy.html') });
+      window.close();
+    } catch (error) {
+      console.error('[Snap Linkit] Could not open privacy policy:', error);
+      showIndicator('Could not open the privacy policy', true, 2500);
+    }
   }
 
   function bindEvents() {
@@ -159,6 +179,11 @@
     // Reset button
     if (elements.resetBtn) {
       elements.resetBtn.addEventListener('click', resetToDefaults);
+    }
+
+    // Privacy policy link
+    if (elements.privacyLink) {
+      elements.privacyLink.addEventListener('click', openPrivacyPolicy);
     }
   }
 
