@@ -142,18 +142,18 @@
 <body>
   <div class="container">
     <h1>Snap Linkit Privacy Policy</h1>
-    <p class="subtitle">Last Updated: September 4, 2026 | Version 1.3.0</p>
+    <p class="subtitle">Last Updated: November 14, 2026 | Version 1.3.0</p>
 
     <div class="summary-box">
       <h2>The Short Version</h2>
-      <p>Snap Linkit does not collect, store, transmit, or share any user data. Period.</p>
+      <p>Snap Linkit does not collect, send, or share any information about you. It only keeps your settings, inside your own browser.</p>
     </div>
 
     <p>
       <span class="badge">Zero Data Collection</span>
-      <span class="badge">Zero Network Requests</span>
-      <span class="badge">100% Local</span>
-      <span class="badge">Independently Verified</span>
+      <span class="badge">Nothing Sent to Us</span>
+      <span class="badge">No Tracking</span>
+      <span class="badge">Open Source</span>
     </p>
 
     <h2>How We Verified This</h2>
@@ -169,7 +169,8 @@
     </ul>
     <p>
       You can verify this yourself: Open your browser's Developer Tools (F12), go to the Network tab,
-      and use the extension. You'll see <strong>zero requests</strong> are made.
+      and use the extension. Snap Linkit sends <strong>nothing</strong> on its own; the only requests
+      you will see are the pages and files you choose to open or download.
     </p>
 
     <h2>Data Collection</h2>
@@ -185,36 +186,45 @@
 
     <h2>Network Requests</h2>
     <p>
-      Snap Linkit makes <span class="highlight">ZERO</span> network requests. The extension runs
-      entirely locally in your browser and never contacts any external servers. You can verify
-      this yourself using your browser's developer tools (Network tab).
+      Snap Linkit <span class="highlight">never</span> sends anything to us or to anyone else. It has
+      no server and contacts none. The only network traffic it causes is what you ask for: when you
+      choose to open or download the links you selected, Firefox loads them just as if you had clicked
+      them yourself. You can verify this using your browser's developer tools (Network tab).
     </p>
 
-    <h2>Local Storage</h2>
+    <h2>What Snap Linkit Stores</h2>
     <p>
-      The extension stores only your preferences (settings) locally on your device using the
-      browser's built-in storage API. Here is the complete list of what we store:
+      Snap Linkit keeps only your settings and one notice flag, using Firefox's built-in storage
+      for add-ons. Here is the complete list:
     </p>
     <ul>
       <li><code>scrollEdgeThreshold</code> - How close to screen edge triggers auto-scroll (default: 50px)</li>
       <li><code>autoScrollSpeed</code> - Speed of auto-scroll (default: 15)</li>
       <li><code>maxTabsWithoutConfirm</code> - Tab count before confirmation dialog (default: 20)</li>
       <li><code>tabOpenDelay</code> - Milliseconds between opening tabs (default: 50ms)</li>
-      <li><code>blacklist</code> - Sites where extension is disabled (default: empty)</li>
+      <li><code>blacklist</code> - The sites you add under Site Filtering (default: empty)</li>
       <li><code>blacklistMode</code> - Blacklist or whitelist mode (default: blacklist)</li>
       <li><code>extensionEnabled</code> - Whether extension is on (default: true)</li>
       <li><code>whatsNew</code> - One-time "what's new" notice after an update; kept only on this device and removed when you click "Got it"</li>
     </ul>
-    <p>That's it. <strong>7 preference values.</strong> This data:</p>
+    <p>That's it: <strong>7 settings and 1 notice flag.</strong> This data:</p>
     <ul>
-      <li>Never leaves your device</li>
-      <li>Is not accessible to us or anyone else</li>
-      <li>Can be deleted by removing the extension</li>
-      <li>Contains nothing about you, your browsing, or the sites you visit</li>
+      <li>Is never sent to us, and we cannot see it</li>
+      <li>Is deleted from your browser when you remove Snap Linkit</li>
+      <li>Contains nothing about you or your browsing, apart from any site names you type into Site Filtering yourself</li>
     </ul>
+    <p>
+      <strong>If you use Firefox Sync:</strong> your 7 settings are saved in Firefox's sync storage. If you
+      are signed in to a Mozilla account with "Add-ons" ticked in Firefox's Sync settings, Firefox copies
+      them to your other computers through Mozilla's servers. Firefox encrypts them before they leave your
+      browser, so Mozilla cannot read them
+      (<a href="https://www.mozilla.org/en-US/privacy/mozilla-accounts/">Mozilla accounts privacy notice</a>).
+      Without Sync, they stay on this device. The notice flag (<code>whatsNew</code>) always stays on this
+      device only.
+    </p>
 
     <h2>Permissions Explained</h2>
-    <p>Here's why Snap Linkit requests each permission:</p>
+    <p>These are all the permissions Snap Linkit asks for, and why:</p>
 
     <table class="permission-table">
       <thead>
@@ -225,24 +235,20 @@
       </thead>
       <tbody>
         <tr>
-          <td><code>activeTab</code></td>
-          <td>Required to run the selection script on the current tab when you use the extension</td>
-        </tr>
-        <tr>
-          <td><code>scripting</code></td>
-          <td>Required to inject the selection rectangle and menu functionality</td>
-        </tr>
-        <tr>
           <td><code>clipboardWrite</code></td>
-          <td>Required to copy selected URLs to your clipboard when you choose "Copy URLs"</td>
+          <td>Lets "Copy URLs", "Copy Link Text" and Ctrl+C put the links you selected on your clipboard.</td>
         </tr>
         <tr>
           <td><code>storage</code></td>
-          <td>Required to save your preferences (settings) locally on your device</td>
+          <td>Lets Snap Linkit remember your settings and the one-time notice.</td>
         </tr>
         <tr>
           <td><code>downloads</code></td>
-          <td>Required for the bulk download feature when you select files to download</td>
+          <td>Lets "Download Files" save the files you selected.</td>
+        </tr>
+        <tr>
+          <td><code>http://*/*</code>, <code>https://*/*</code> (access to websites)</td>
+          <td>Lets Snap Linkit draw the selection box and find the links on the web pages you use it on; nothing from those pages is sent anywhere.</td>
         </tr>
       </tbody>
     </table>
@@ -251,6 +257,8 @@
     <p>
       We do not share any data with third parties because we don't have any data to share.
       There are no analytics services, no advertising networks, no data brokers.
+      If you use Firefox Sync, your settings pass through Mozilla's servers in encrypted form, as
+      explained above; that is a Firefox feature you control, not something Snap Linkit sends.
     </p>
 
     <h2>Children's Privacy</h2>
@@ -274,19 +282,20 @@
 
     <h2>Contact</h2>
     <p>
-      For questions about this privacy policy or the extension, please open an issue on
-      our GitHub repository or contact us at the email provided in the Chrome Web Store listing.
+      For questions about this privacy policy or the extension, please open an issue at
+      <a href="https://github.com/robertbried/snap-linkit/issues">github.com/robertbried/snap-linkit/issues</a>.
     </p>
 
     <div class="verify-box">
       <strong>Verify it yourself:</strong> Open DevTools (F12) → Network tab → Use the extension →
-      Observe zero network requests. Our source code is open for inspection—no obfuscation, no minification,
+      Snap Linkit sends nothing on its own; you only see the pages and files you choose to open or download.
+      Our source code is open for inspection—no obfuscation, no minification,
       nothing to hide.
     </div>
 
     <div class="footer">
       <p><strong>Snap Linkit</strong> - Your browsing is your business.</p>
-      <p>Privacy claims independently verified via static code analysis.</p>
+      <p>Privacy claims checked against the source code, which anyone can read.</p>
       <p style="margin-top: 10px; font-size: 0.85rem;">Made with respect for your privacy.</p>
     </div>
   </div>
