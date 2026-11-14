@@ -7,7 +7,7 @@
   'use strict';
 
   // Pure helpers live in lib/helpers.js (loaded first by popup.html)
-  const { isValidPattern, blacklistBytes } = globalThis.SnapLinkitLib;
+  const { isValidPattern, blacklistBytes, whatsNewLines } = globalThis.SnapLinkitLib;
 
   const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
 
@@ -42,6 +42,7 @@
     showVersion();
     watchHostAccess();
     checkHostAccess();
+    showWhatsNew();
 
     // Flush a pending debounced save if the popup closes mid-drag
     window.addEventListener('pagehide', () => {
@@ -86,6 +87,11 @@
     // Host-permission banner
     elements.permissionBanner = document.getElementById('permissionBanner');
     elements.grantAccessBtn = document.getElementById('grantAccessBtn');
+
+    // What's new note (Info tab)
+    elements.whatsNew = document.getElementById('whatsNew');
+    elements.whatsNewLines = document.getElementById('whatsNewLines');
+    elements.whatsNewDismiss = document.getElementById('whatsNewDismiss');
   }
 
   // storage.sync is the single source of truth (content.js reads only it).
@@ -199,6 +205,11 @@
     if (elements.grantAccessBtn) {
       elements.grantAccessBtn.addEventListener('click', requestHostAccess);
     }
+
+    // "Got it" on the what's new note
+    if (elements.whatsNewDismiss) {
+      elements.whatsNewDismiss.addEventListener('click', dismissWhatsNew);
+    }
   }
 
   function updateUI() {
@@ -282,6 +293,59 @@
       if (event && typeof event.addListener === 'function') {
         event.addListener(checkHostAccess);
       }
+    }
+  }
+
+  // ---- What's new note (1.3.0 shortcut change) ----
+  // background.js stores whatsNew = { version, badge } in storage.local on an
+  // update from before 1.3.0. Opening the popup clears the toolbar badge and
+  // tooltip; the note stays until "Got it". Lines are rebuilt from the
+  // current shortcuts, so one the user has customised since is left out.
+  async function clearWhatsNewBadge() {
+    await browserAPI.action.setBadgeText({ text: '' });
+    await browserAPI.action.setTitle({ title: null });
+  }
+
+  async function showWhatsNew() {
+    if (!elements.whatsNew || !elements.whatsNewLines) return;
+    try {
+      const { whatsNew } = await browserAPI.storage.local.get('whatsNew');
+      if (!whatsNew) return;
+      const [commands, platform] = await Promise.all([
+        browserAPI.commands.getAll(),
+        browserAPI.runtime.getPlatformInfo(),
+      ]);
+      const lines = whatsNewLines(commands, platform.os === 'mac');
+      if (lines.length === 0) {
+        // Both shortcuts customised or cleared since the update: nothing to announce
+        await browserAPI.storage.local.remove('whatsNew');
+        await clearWhatsNewBadge();
+        return;
+      }
+      elements.whatsNewLines.replaceChildren();
+      for (const line of lines) {
+        const row = document.createElement('div');
+        row.textContent = line;
+        elements.whatsNewLines.appendChild(row);
+      }
+      elements.whatsNew.hidden = false;
+      if (whatsNew.badge !== false) {
+        await browserAPI.storage.local.set({ whatsNew: { ...whatsNew, badge: false } });
+        await clearWhatsNewBadge();
+      }
+    } catch (error) {
+      console.warn("[Snap Linkit] What's new note unavailable:", error.message);
+    }
+  }
+
+  async function dismissWhatsNew() {
+    elements.whatsNew.hidden = true;
+    try {
+      await browserAPI.storage.local.remove('whatsNew');
+      await clearWhatsNewBadge();
+    } catch (error) {
+      console.warn("[Snap Linkit] Could not dismiss the what's new note:", error.message);
+      showIndicator('Could not save', true, 3000);
     }
   }
 

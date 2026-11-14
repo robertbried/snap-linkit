@@ -6,7 +6,9 @@
 const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
 
 // Pure helpers live in lib/helpers.js (loaded first by the manifest)
-const { isOpenableUrl, filenameFromUrl } = globalThis.SnapLinkitLib;
+const {
+  isOpenableUrl, filenameFromUrl, shouldOfferWhatsNew, whatsNewLines, WHATS_NEW_VERSION
+} = globalThis.SnapLinkitLib;
 
 // ============================================
 // KEYBOARD SHORTCUT HANDLER
@@ -23,6 +25,49 @@ browserAPI.commands.onCommand.addListener(async (command) => {
   } catch (error) {
     console.debug('Snap Linkit: Could not send command to tab:', error.message);
   }
+});
+
+// ============================================
+// "WHAT'S NEW" NOTICE (1.3.0 shortcut change)
+// ============================================
+// storage.local "whatsNew" = { version, badge }. Set here on an update from
+// before 1.3.0; popup.js sets badge to false when the popup first opens and
+// removes the key on "Got it". The toolbar badge does not survive a browser
+// restart, so onStartup puts it back while badge is still true. Both
+// listeners are registered at the top level so the background page wakes.
+const WHATS_NEW_TITLE = 'Snap Linkit: new keyboard shortcuts';
+
+async function showWhatsNewBadge() {
+  await browserAPI.action.setBadgeText({ text: 'NEW' });
+  await browserAPI.action.setBadgeBackgroundColor({ color: '#bf00ff' });
+  await browserAPI.action.setBadgeTextColor({ color: '#ffffff' });
+  await browserAPI.action.setTitle({ title: WHATS_NEW_TITLE });
+}
+
+async function offerWhatsNew() {
+  // Nothing changed for a user who customised or cleared both shortcuts
+  const commands = await browserAPI.commands.getAll();
+  if (whatsNewLines(commands, false).length === 0) return;
+  await browserAPI.storage.local.set({ whatsNew: { version: WHATS_NEW_VERSION, badge: true } });
+  await showWhatsNewBadge();
+}
+
+async function restoreWhatsNewBadge() {
+  const { whatsNew } = await browserAPI.storage.local.get('whatsNew');
+  if (whatsNew && whatsNew.badge === true) await showWhatsNewBadge();
+}
+
+browserAPI.runtime.onInstalled.addListener((details) => {
+  if (!shouldOfferWhatsNew(details)) return;
+  offerWhatsNew().catch((error) => {
+    console.warn("Snap Linkit: could not set up the what's new notice:", error?.message);
+  });
+});
+
+browserAPI.runtime.onStartup.addListener(() => {
+  restoreWhatsNewBadge().catch((error) => {
+    console.warn("Snap Linkit: could not restore the what's new badge:", error?.message);
+  });
 });
 
 // ============================================

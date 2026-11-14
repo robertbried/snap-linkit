@@ -85,6 +85,26 @@
       display: none;
     }
 
+    /* "What's new" note at the top of the Info tab (shown by popup.js until "Got it") */
+    .whats-new {
+      padding: 8px 12px;
+      font-size: 12px;
+      line-height: 1.4;
+      background: #bf00ff1a;
+      border-bottom: 1px solid #bf00ff33;
+    }
+
+    .whats-new[hidden] {
+      display: none;
+    }
+
+    .whats-new-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+
     .tab-label {
       flex: 1;
       padding: 8px;
@@ -597,6 +617,16 @@
 
   <!-- Info Tab Content -->
   <div class="tab-content" id="content-info">
+    <!-- What's new (1.3.0 shortcut change): popup.js fills the lines from commands.getAll -->
+    <div class="whats-new" id="whatsNew" hidden>
+      <div class="whats-new-head">
+        <strong>New keyboard shortcuts</strong>
+        <button class="add-btn" id="whatsNewDismiss">Got it</button>
+      </div>
+      <div id="whatsNewLines"></div>
+      <div>The old ones didn't always work.</div>
+    </div>
+
     <div class="section">
       <div class="section-title">How to Use</div>
       <div class="instruction">

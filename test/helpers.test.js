@@ -6,9 +6,10 @@ const lib = require('../src/lib/helpers.js');
 
 test('SnapLinkitLib exposes every helper and is frozen', () => {
   assert.deepEqual(Object.keys(lib).sort(), [
-    'DOWNLOAD_EXTENSIONS', 'OPENABLE_PROTOCOLS', 'blacklistBytes', 'filenameFromUrl',
-    'isDownloadableUrl', 'isOpenableUrl', 'isValidPattern', 'majorityShouldCheck',
-    'matchesPattern', 'plural', 'rectsIntersect', 'selectionRect',
+    'DOWNLOAD_EXTENSIONS', 'OPENABLE_PROTOCOLS', 'WHATS_NEW_SHORTCUTS', 'WHATS_NEW_VERSION',
+    'blacklistBytes', 'filenameFromUrl', 'formatShortcut', 'isDownloadableUrl', 'isOpenableUrl',
+    'isValidPattern', 'isVersionBefore', 'majorityShouldCheck', 'matchesPattern', 'plural',
+    'rectsIntersect', 'selectionRect', 'shouldOfferWhatsNew', 'whatsNewLines',
   ]);
   assert.ok(Object.isFrozen(lib));
   assert.equal(globalThis.SnapLinkitLib, lib);
@@ -153,4 +154,50 @@ test('filenameFromUrl: last path segment, decoded, sanitized, with fallback', ()
     'https://a.b/x/y/z.mp4?dl=1': 'z.mp4',
   };
   for (const [url, expected] of Object.entries(cases)) assert.equal(lib.filenameFromUrl(url), expected, url);
+});
+
+test('isVersionBefore: dotted numeric compare', () => {
+  assert.equal(lib.isVersionBefore('1.2.1', '1.3.0'), true);
+  assert.equal(lib.isVersionBefore('1.2', '1.3.0'), true);
+  assert.equal(lib.isVersionBefore('0.9.99', '1.3.0'), true);
+  assert.equal(lib.isVersionBefore('1.3.0', '1.3.0'), false);
+  assert.equal(lib.isVersionBefore('1.3', '1.3.0'), false);
+  assert.equal(lib.isVersionBefore('1.3.1', '1.3.0'), false);
+  assert.equal(lib.isVersionBefore('1.10.0', '1.3.0'), false);
+  assert.equal(lib.isVersionBefore('2.0', '1.3.0'), false);
+});
+
+test('shouldOfferWhatsNew: only an update from a version before 1.3.0', () => {
+  assert.equal(lib.WHATS_NEW_VERSION, '1.3.0');
+  assert.equal(lib.shouldOfferWhatsNew({ reason: 'update', previousVersion: '1.2.1', temporary: false }), true);
+  assert.equal(lib.shouldOfferWhatsNew({ reason: 'update', previousVersion: '1.2.1', temporary: true }), true, 'temporary loads are not skipped');
+  assert.equal(lib.shouldOfferWhatsNew({ reason: 'update', previousVersion: '1.3.0', temporary: true }), false, 'reload of the same version');
+  assert.equal(lib.shouldOfferWhatsNew({ reason: 'update', previousVersion: '1.3.1' }), false);
+  assert.equal(lib.shouldOfferWhatsNew({ reason: 'install', temporary: false }), false);
+  assert.equal(lib.shouldOfferWhatsNew({ reason: 'browser_update' }), false);
+  assert.equal(lib.shouldOfferWhatsNew({ reason: 'update' }), false, 'no previousVersion');
+  for (const v of [undefined, null, {}]) assert.equal(lib.shouldOfferWhatsNew(v), false);
+});
+
+test('formatShortcut: spaced, Option/Command/Control on macOS, Comma kept as a word', () => {
+  assert.equal(lib.formatShortcut('Alt+Shift+Comma', false), 'Alt + Shift + Comma');
+  assert.equal(lib.formatShortcut('Alt+Shift+L', true), 'Option + Shift + L');
+  assert.equal(lib.formatShortcut('Ctrl+Shift+K', true), 'Command + Shift + K');
+  assert.equal(lib.formatShortcut('MacCtrl+Shift+K', true), 'Control + Shift + K');
+  assert.equal(lib.formatShortcut('Ctrl+Shift+K', false), 'Ctrl + Shift + K');
+});
+
+test('whatsNewLines: one line per command still on its new default', () => {
+  const defaults = [{ name: 'toggle-extension', shortcut: 'Alt+Shift+L' }, { name: 'open-selected-tabs', shortcut: 'Alt+Shift+Comma' }];
+  assert.deepEqual(lib.whatsNewLines(defaults, false), [
+    'Turn Snap Linkit on or off: Alt + Shift + L', 'Open selected links: Alt + Shift + Comma',
+  ]);
+  assert.deepEqual(lib.whatsNewLines(defaults, true), [
+    'Turn Snap Linkit on or off: Option + Shift + L', 'Open selected links: Option + Shift + Comma',
+  ]);
+  const oneCustom = [{ name: 'toggle-extension', shortcut: 'Alt+Shift+K' }, { name: 'open-selected-tabs', shortcut: 'Alt+Shift+Comma' }];
+  assert.deepEqual(lib.whatsNewLines(oneCustom, false), ['Open selected links: Alt + Shift + Comma']);
+  const cleared = [{ name: 'toggle-extension', shortcut: '' }, { name: 'open-selected-tabs', shortcut: 'Ctrl+Alt+P' }];
+  assert.deepEqual(lib.whatsNewLines(cleared, false), []);
+  assert.deepEqual(lib.whatsNewLines(undefined, false), []);
 });

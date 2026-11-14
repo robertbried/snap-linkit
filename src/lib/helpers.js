@@ -175,6 +175,56 @@
     return cleaned || 'download';
   }
 
+  // ---- "What's new" notice for the 1.3.0 shortcut change ----
+  // The version that changed the defaults, and the new defaults. A command
+  // whose current shortcut still equals its entry here is one the user saw
+  // change; a customised or cleared shortcut did not change for them.
+  const WHATS_NEW_VERSION = '1.3.0';
+  const WHATS_NEW_SHORTCUTS = Object.freeze([
+    Object.freeze({ name: 'toggle-extension', label: 'Turn Snap Linkit on or off', shortcut: 'Alt+Shift+L' }),
+    Object.freeze({ name: 'open-selected-tabs', label: 'Open selected links', shortcut: 'Alt+Shift+Comma' }),
+  ]);
+
+  // Dotted numeric version compare: true when a is older than b
+  // ("1.2.1" < "1.3.0"). Missing or non-numeric parts count as 0.
+  function isVersionBefore(a, b) {
+    const pa = String(a).split('.').map((n) => parseInt(n, 10) || 0);
+    const pb = String(b).split('.').map((n) => parseInt(n, 10) || 0);
+    for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+      const x = pa[i] || 0;
+      const y = pb[i] || 0;
+      if (x !== y) return x < y;
+    }
+    return false;
+  }
+
+  // runtime.onInstalled details -> offer the notice? Only an update from a
+  // version before 1.3.0. Installs, browser updates and reloads of the same
+  // version are excluded; temporary loads are deliberately not.
+  function shouldOfferWhatsNew(details) {
+    return Boolean(details) && details.reason === 'update' &&
+      typeof details.previousVersion === 'string' &&
+      isVersionBefore(details.previousVersion, WHATS_NEW_VERSION);
+  }
+
+  // "Alt+Shift+Comma" -> "Alt + Shift + Comma"; on macOS Alt is the Option
+  // key and Ctrl means Command (MDN manifest.json/commands).
+  const MAC_KEY_NAMES = { Alt: 'Option', Ctrl: 'Command', MacCtrl: 'Control' };
+  function formatShortcut(shortcut, isMac) {
+    return String(shortcut).split('+')
+      .map((part) => (isMac && MAC_KEY_NAMES[part]) || (part === 'MacCtrl' ? 'Control' : part))
+      .join(' + ');
+  }
+
+  // commands.getAll() result -> note lines, one per command still on its new
+  // default. Empty when the user customised or cleared both.
+  function whatsNewLines(commands, isMac) {
+    const current = new Map((Array.isArray(commands) ? commands : []).map((c) => [c && c.name, c && c.shortcut]));
+    return WHATS_NEW_SHORTCUTS
+      .filter((s) => current.get(s.name) === s.shortcut)
+      .map((s) => `${s.label}: ${formatShortcut(s.shortcut, isMac)}`);
+  }
+
   globalThis.SnapLinkitLib = Object.freeze({
     OPENABLE_PROTOCOLS,
     isOpenableUrl,
@@ -188,6 +238,12 @@
     majorityShouldCheck,
     plural,
     filenameFromUrl,
+    WHATS_NEW_VERSION,
+    WHATS_NEW_SHORTCUTS,
+    isVersionBefore,
+    shouldOfferWhatsNew,
+    formatShortcut,
+    whatsNewLines,
   });
 
   if (typeof module !== 'undefined' && module.exports) {
