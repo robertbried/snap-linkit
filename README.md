@@ -34,7 +34,7 @@ Toolbar popup, Settings tab:
 Keyboard shortcuts:
 
 - Alt+Shift+L (Option+Shift+L on macOS): toggle Snap Linkit on/off (applies to all tabs).
-- Alt+Shift+O: open all selected links in new tabs.
+- Alt+Shift+Comma (Option+Shift+Comma on macOS): open all selected links in new tabs.
 
 ## Permissions
 

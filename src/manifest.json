@@ -42,8 +42,8 @@
     },
     "open-selected-tabs": {
       "suggested_key": {
-        "default": "Alt+Shift+O",
-        "mac": "Alt+Shift+O"
+        "default": "Alt+Shift+Comma",
+        "mac": "Alt+Shift+Comma"
       },
       "description": "Open all selected links in new tabs"
     }
