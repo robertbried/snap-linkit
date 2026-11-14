@@ -49,7 +49,7 @@
     });
   });
 
-  // Keep the toggle honest if Alt+Shift+S flips the setting while the popup is open
+  // Keep the toggle honest if Alt+Shift+L flips the setting while the popup is open
   browserAPI.storage.onChanged.addListener((changes, area) => {
     if (area !== 'sync' || !('extensionEnabled' in changes) || !elements.extensionEnabled) return;
     currentSettings.extensionEnabled = changes.extensionEnabled.newValue !== false;
@@ -158,7 +158,7 @@
       }
     });
 
-    // On/off toggle (the same setting the Alt+Shift+S command flips; global)
+    // On/off toggle (the same setting the Alt+Shift+L command flips; global)
     if (elements.extensionEnabled) {
       elements.extensionEnabled.addEventListener('change', (e) => {
         currentSettings.extensionEnabled = e.target.checked;

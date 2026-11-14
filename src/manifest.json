@@ -35,8 +35,8 @@
   "commands": {
     "toggle-extension": {
       "suggested_key": {
-        "default": "Alt+Shift+S",
-        "mac": "Alt+Shift+S"
+        "default": "Alt+Shift+L",
+        "mac": "Alt+Shift+L"
       },
       "description": "Toggle Snap Linkit on/off (applies to all tabs)"
     },

@@ -25,7 +25,7 @@ Toolbar popup, Info tab: a usage summary and the shortcut list.
 
 Toolbar popup, Settings tab:
 
-- "Snap Linkit enabled": turns the extension on or off for all tabs. The Alt+Shift+S shortcut flips the same setting.
+- "Snap Linkit enabled": turns the extension on or off for all tabs. The Alt+Shift+L shortcut flips the same setting.
 - Auto-Scroll: "Edge Threshold" (10 to 100 px, default 50), how close to the window edge the pointer must be before the page scrolls; "Scroll Speed" (5 to 30 px per frame, default 15).
 - Tab Opening: "Confirm at" (5 to 100 tabs, default 20), the link count above which the confirmation dialog appears; "Delay Between" (0 to 2000 ms in steps of 50, default 50), the pause between opening one tab and the next.
 - Site Filtering: a list of host patterns with a Blacklist/Whitelist switch. In Blacklist mode the extension runs everywhere except the listed sites; in Whitelist mode it runs only on them. Patterns use lowercase letters, digits, dots, hyphens and "*", and must contain a dot. "*.example.com" matches example.com and every subdomain of it; "example.com" matches only that exact host. Up to 100 entries and 6 KB in total. Internationalized domain names must be entered in punycode form (for example xn--bcher-kva.example).
@@ -33,7 +33,7 @@ Toolbar popup, Settings tab:
 
 Keyboard shortcuts:
 
-- Alt+Shift+S: toggle Snap Linkit on/off (applies to all tabs).
+- Alt+Shift+L (Option+Shift+L on macOS): toggle Snap Linkit on/off (applies to all tabs).
 - Alt+Shift+O: open all selected links in new tabs.
 
 ## Permissions
