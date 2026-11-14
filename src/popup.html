@@ -74,7 +74,7 @@
       justify-content: space-between;
       align-items: center;
       gap: 8px;
-      padding: 8px 16px;
+      padding: 6px 16px;
       background: #2a2a3e;
       border-bottom: 1px solid #ff4444;
       color: #ff4444;
@@ -83,6 +83,11 @@
 
     .permission-banner[hidden] {
       display: none;
+    }
+
+    /* Banner-only: trims the shared .add-btn so the banner stays short enough for Settings not to scroll */
+    .permission-banner .add-btn {
+      padding: 4px 12px;
     }
 
     /* "What's new" note at the top of the Info tab (shown by popup.js until "Got it") */
@@ -593,7 +598,7 @@
 
   <!-- Host-permission banner (hidden unless popup.js finds site access missing) -->
   <div class="permission-banner" id="permissionBanner" hidden>
-    <span>Snap Linkit needs access to websites to work.</span>
+    <span>Needs website access to work.</span>
     <button class="add-btn" id="grantAccessBtn">Grant access</button>
   </div>
 
