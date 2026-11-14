@@ -45,7 +45,7 @@ Keyboard shortcuts:
 
 ## Privacy
 
-The extension makes no network requests; the source contains no fetch, XMLHttpRequest or WebSocket calls. Selected links are only opened, copied or downloaded when you choose an action. Settings are stored with storage.sync and nowhere else. The bundled privacy policy is [src/privacy-policy.html](src/privacy-policy.html), also reachable from the "Privacy policy" link in the popup footer.
+Snap Linkit sends nothing on its own: the source contains no fetch, XMLHttpRequest or WebSocket calls, and the only network requests are the pages and files you choose to open or download. Selected links are only opened, copied or downloaded when you choose an action. Your settings are kept in storage.sync (Firefox Sync can copy them to your other devices if you use Sync), and a one-time What's-new flag is kept in local storage. The bundled privacy policy is [src/privacy-policy.html](src/privacy-policy.html), also reachable from the "Privacy policy" link in the popup footer.
 
 ## Development
 
