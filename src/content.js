@@ -714,7 +714,11 @@
     });
   }
 
+  // Every path that acts on or drops the selection ends here, so the menu
+  // closes with it: a menu left open would still hold the old link list and
+  // act on it again (e.g. after Alt+Shift+Comma or Ctrl+C).
   function clearSelection() {
+    hideMenu();
     document.querySelectorAll('.snaplinkit-highlighted').forEach(el => {
       el.classList.remove('snaplinkit-highlighted');
     });
