@@ -957,9 +957,23 @@
       return;
     }
 
-    // If we have links, show the menu
+    // Links: act directly. A plain drag opens them in new tabs, the same
+    // path as the menu's "Open N in New Tabs" (so the Confirm-at dialog
+    // still applies). The menu appears instead when Ctrl is held at release,
+    // or after a Shift (add) / Alt (remove) drag, which build a selection up
+    // over several drags. Checkboxes or buttons in a mixed selection are
+    // left alone, as before.
     if (links.length > 0) {
-      showMenu(e.clientX, e.clientY);
+      if (e.ctrlKey || state.modifierMode) {
+        showMenu(e.clientX, e.clientY);
+      } else {
+        const urls = getUniqueUrls();
+        if (urls.length > 0) {
+          openTabs(urls, false);
+        } else {
+          clearSelection();
+        }
+      }
     } else {
       // Only buttons selected - clear
       clearSelection();
