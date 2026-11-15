@@ -51,6 +51,7 @@
   // ============================================
   let lassoEl = null;
   let menuEl = null;
+  let confirmDialog = null; // { el, cancel } while the "Open N tabs?" confirm is showing
 
   // ============================================
   // BROWSER API
@@ -457,6 +458,13 @@
   }
 
   function showConfirmDialog(count, onConfirm) {
+    // One confirm at a time: a second request while it shows (e.g. the
+    // shortcut pressed again) is ignored, so Open All cannot run twice.
+    if (confirmShowing()) return;
+    // The menu acts on the same selection; close it so it cannot be clicked
+    // while the confirm is up (it would otherwise sit above the backdrop).
+    hideMenu();
+
     const overlay = document.createElement('div');
     overlay.className = 'snaplinkit-confirm-overlay';
 
@@ -481,10 +489,16 @@
     document.body.appendChild(overlay);
     document.body.appendChild(dialog);
 
+    const previousFocus = document.activeElement;
     const cleanup = () => {
       overlay.remove();
       dialog.remove();
+      confirmDialog = null;
+      if (previousFocus && previousFocus.isConnected && typeof previousFocus.focus === 'function') {
+        previousFocus.focus({ preventScroll: true });
+      }
     };
+    confirmDialog = { el: dialog, cancel: cleanup }; // Escape (onKeyDown) cancels through this
 
     cancelBtn.addEventListener('click', cleanup);
     confirmBtn.addEventListener('click', () => {
@@ -492,6 +506,17 @@
       onConfirm();
     });
     overlay.addEventListener('click', cleanup);
+
+    // Focus the safe choice: Enter or Space right after the dialog appears
+    // cancels instead of opening every tab.
+    cancelBtn.focus({ preventScroll: true });
+  }
+
+  // False once the page itself has removed the dialog (e.g. replaced <body>),
+  // so a lost dialog cannot block new selections or confirms for good.
+  function confirmShowing() {
+    if (confirmDialog && !confirmDialog.el.isConnected) confirmDialog = null;
+    return confirmDialog !== null;
   }
 
   function showToast(message) {
@@ -804,6 +829,8 @@
 
     // Right-click (button 2) triggers selection
     if (e.button !== 2) return;
+    // No new selection (and so no new menu) while the confirm is up
+    if (confirmShowing()) return;
     if (e.target.closest('input, textarea, select, button, [contenteditable]')) return;
 
     // Close menu when starting new selection (but keep selection for modifier modes)
@@ -931,6 +958,14 @@
     }
 
     if (e.key === 'Escape') {
+      // With the confirm showing, Escape means Cancel and nothing more:
+      // the selection stays, and the page does not see the key.
+      if (confirmShowing()) {
+        e.preventDefault();
+        e.stopPropagation();
+        confirmDialog.cancel();
+        return;
+      }
       cancelSelection();
     }
   }
