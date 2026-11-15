@@ -7,7 +7,7 @@ const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
 
 // Pure helpers live in lib/helpers.js (loaded first by the manifest)
 const {
-  isOpenableUrl, filenameFromUrl, shouldOfferWhatsNew, whatsNewLines, WHATS_NEW_VERSION
+  isOpenableUrl, filenameFromUrl, shouldOfferWhatsNew, whatsNewLines, WHATS_NEW_VERSION, isVersionBefore
 } = globalThis.SnapLinkitLib;
 
 // ============================================
@@ -57,7 +57,26 @@ async function restoreWhatsNewBadge() {
   if (whatsNew && whatsNew.badge === true) await showWhatsNewBadge();
 }
 
+// 1.2.1's content script matched <all_urls>, so Firefox granted <all_urls> at
+// install and keeps it on update (Firefox Bug 2022704: stale host grants are
+// only revoked for policy-managed add-ons). 1.3.0 no longer declares it, so the
+// about:addons site-access toggle cannot revoke it and turning access off did
+// nothing. Drop it once, on the update from a version before 1.3.0; the
+// http/https grants stay. Failures are logged and never block anything else.
+function clearLegacyAllUrlsGrant(details) {
+  if (!details || details.reason !== 'update' || typeof details.previousVersion !== 'string' ||
+      !isVersionBefore(details.previousVersion, '1.3.0')) {
+    return;
+  }
+  Promise.resolve()
+    .then(() => browserAPI.permissions.remove({ origins: ['<all_urls>'] }))
+    .catch((error) => {
+      console.warn('Snap Linkit: could not clear the <all_urls> grant left by 1.2.1:', error?.message);
+    });
+}
+
 browserAPI.runtime.onInstalled.addListener((details) => {
+  clearLegacyAllUrlsGrant(details);
   if (!shouldOfferWhatsNew(details)) return;
   offerWhatsNew().catch((error) => {
     console.warn("Snap Linkit: could not set up the what's new notice:", error?.message);
