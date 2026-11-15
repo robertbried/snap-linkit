@@ -9,7 +9,7 @@
   // Pure helpers live in lib/helpers.js (loaded first by the manifest)
   const {
     isOpenableUrl, matchesPattern, rectsIntersect, selectionRect,
-    isDownloadableUrl, majorityShouldCheck, plural
+    isDownloadableUrl, majorityShouldCheck, plural, fitMenuAxis
   } = globalThis.SnapLinkitLib;
 
   // ============================================
@@ -418,27 +418,45 @@
 
     document.body.appendChild(menuEl);
 
-    // Position menu within viewport
-    const menuRect = menuEl.getBoundingClientRect();
-    const viewWidth = window.innerWidth;
-    const viewHeight = window.innerHeight;
-
-    let menuX = x;
-    let menuY = y;
-
-    if (x + menuRect.width > viewWidth - 10) {
-      menuX = viewWidth - menuRect.width - 10;
+    // Keep the whole menu inside the visible area (fitMenuAxis in
+    // lib/helpers.js). Width first, since a narrower menu can wrap and grow
+    // taller; then height; then the final left from the final width (an
+    // inner scrollbar can make it wider).
+    const view = visibleArea();
+    const MARGIN = 10;
+    const widthFit = fitMenuAxis(x, menuEl.getBoundingClientRect().width, view.width, MARGIN);
+    if (widthFit.max !== null) {
+      menuEl.style.minWidth = '0';
+      menuEl.style.maxWidth = `${widthFit.max}px`;
     }
-    if (y + menuRect.height > viewHeight - 10) {
-      menuY = viewHeight - menuRect.height - 10;
+    const heightFit = fitMenuAxis(y, menuEl.getBoundingClientRect().height, view.height, MARGIN);
+    if (heightFit.max !== null) {
+      // Taller than the window: cap it and let it scroll inside itself
+      menuEl.style.maxHeight = `${heightFit.max}px`;
+      menuEl.style.overflowY = 'auto';
+      menuEl.style.overscrollBehavior = 'contain';
     }
+    const leftFit = fitMenuAxis(x, menuEl.getBoundingClientRect().width, view.width, MARGIN);
 
-    menuEl.style.left = `${Math.max(10, menuX)}px`;
-    menuEl.style.top = `${Math.max(10, menuY)}px`;
+    menuEl.style.left = `${leftFit.pos}px`;
+    menuEl.style.top = `${heightFit.pos}px`;
 
     setTimeout(() => {
       document.addEventListener('click', handleOutsideClick);
     }, 10);
+  }
+
+  // The viewport a position:fixed element can use, without classic
+  // (always-visible) scrollbars: innerWidth/innerHeight include them. The
+  // root element reports it in standards mode, <body> in quirks mode.
+  function visibleArea() {
+    const root = document.compatMode === 'BackCompat' ? document.body : document.documentElement;
+    const w = root ? root.clientWidth : 0;
+    const h = root ? root.clientHeight : 0;
+    return {
+      width: w > 0 ? Math.min(w, window.innerWidth) : window.innerWidth,
+      height: h > 0 ? Math.min(h, window.innerHeight) : window.innerHeight
+    };
   }
 
   function hideMenu() {

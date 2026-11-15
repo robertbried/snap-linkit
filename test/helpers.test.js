@@ -7,7 +7,7 @@ const lib = require('../src/lib/helpers.js');
 test('SnapLinkitLib exposes every helper and is frozen', () => {
   assert.deepEqual(Object.keys(lib).sort(), [
     'DOWNLOAD_EXTENSIONS', 'OPENABLE_PROTOCOLS', 'WHATS_NEW_SHORTCUTS', 'WHATS_NEW_VERSION',
-    'blacklistBytes', 'filenameFromUrl', 'formatShortcut', 'isDownloadableUrl', 'isOpenableUrl',
+    'blacklistBytes', 'filenameFromUrl', 'fitMenuAxis', 'formatShortcut', 'isDownloadableUrl', 'isOpenableUrl',
     'isValidPattern', 'isVersionBefore', 'majorityShouldCheck', 'matchesPattern', 'plural',
     'rectsIntersect', 'selectionRect', 'shouldOfferWhatsNew', 'whatsNewLines',
   ]);
@@ -200,4 +200,41 @@ test('whatsNewLines: one line per command still on its new default', () => {
   const cleared = [{ name: 'toggle-extension', shortcut: '' }, { name: 'open-selected-tabs', shortcut: 'Ctrl+Alt+P' }];
   assert.deepEqual(lib.whatsNewLines(cleared, false), []);
   assert.deepEqual(lib.whatsNewLines(undefined, false), []);
+});
+
+test('fitMenuAxis: menu that fits stays at the pointer, or moves back by its overflow, never past the margin', () => {
+  assert.deepEqual(lib.fitMenuAxis(500, 257, 1000, 10), { pos: 500, max: null });   // room below the pointer
+  assert.deepEqual(lib.fitMenuAxis(900, 257, 1000, 10), { pos: 733, max: null });   // 1000 - 10 - 257
+  assert.deepEqual(lib.fitMenuAxis(0, 257, 1000, 10), { pos: 10, max: null });      // start edge
+  assert.deepEqual(lib.fitMenuAxis(-40, 220, 1000, 10), { pos: 10, max: null });    // pointer outside the window
+  assert.deepEqual(lib.fitMenuAxis(400, 257, 277, 10), { pos: 10, max: null });     // exactly fills space - 2 margins
+});
+
+test('fitMenuAxis: menu that fits the space but not the margins: margins shrink, no cap, no scroll', () => {
+  assert.deepEqual(lib.fitMenuAxis(200, 217, 227, 10), { pos: 5, max: null });      // 4-item menu, 227 px window
+  assert.deepEqual(lib.fitMenuAxis(0, 227, 227, 10), { pos: 0, max: null });        // exactly the space
+});
+
+test('fitMenuAxis: menu larger than the space is capped to space - 2 margins and pinned at the margin', () => {
+  assert.deepEqual(lib.fitMenuAxis(200, 257, 227, 10), { pos: 10, max: 207 });
+  assert.deepEqual(lib.fitMenuAxis(5, 306, 300, 10), { pos: 10, max: 280 });
+  assert.deepEqual(lib.fitMenuAxis(150, 220, 200, 10), { pos: 10, max: 180 });     // width axis
+  assert.deepEqual(lib.fitMenuAxis(0, 50, 10, 10), { pos: 10, max: 0 });           // degenerate: never negative
+});
+
+test('fitMenuAxis: result always lies inside the space; inside the margins unless only the shrunk margins fit (sweep)', () => {
+  for (const space of [60, 227, 300, 326, 715, 1000]) {
+    for (const size of [40, 217, 240.5, 257, 300, 306, 900]) {
+      for (const start of [-50, 0, 5, space / 2, space - 5, space + 50]) {
+        const { pos, max } = lib.fitMenuAxis(start, size, space, 10);
+        const used = max === null ? size : max;
+        const where = `space ${space} size ${size} start ${start}`;
+        assert.ok(pos >= 0 && pos + used <= space + 1e-9, `outside: pos ${pos} end ${pos + used} ${where}`);
+        if (size <= space - 20 || size > space) {
+          assert.ok(pos >= 10 && pos + used <= space - 10 + 1e-9, `margin: pos ${pos} end ${pos + used} ${where}`);
+        }
+        assert.equal(max === null, size <= space, `capped iff larger than the space: ${where}`);
+      }
+    }
+  }
 });

@@ -141,6 +141,28 @@
     return checkedCount <= total / 2;
   }
 
+  // Place one axis of the action menu inside the visible area.
+  //   start   pointer coordinate (where the menu would start)
+  //   size    the menu's natural size on this axis
+  //   space   visible size of the viewport on this axis (scrollbars excluded)
+  //   margin  gap to keep from both edges
+  // Returns { pos, max }: pos is the menu's start coordinate; max is null when
+  // the menu fits, otherwise the size to cap it at (it then scrolls inside).
+  // - Fits with `margin` on both sides: at the pointer, moved back by the
+  //   overflow, never closer than `margin` to the start edge (the menu's
+  //   placement before P2-3).
+  // - Fits only with less: the margins shrink (centred), so the whole menu
+  //   stays visible without scrolling.
+  // - Larger than the space: capped to space - 2 * margin, pinned at margin.
+  function fitMenuAxis(start, size, space, margin) {
+    const avail = Math.max(0, space - 2 * margin);
+    if (size > space) return { pos: margin, max: avail };
+    if (size > avail) return { pos: (space - size) / 2, max: null };
+    let pos = start;
+    if (pos + size > space - margin) pos = space - margin - size;
+    return { pos: Math.max(margin, pos), max: null };
+  }
+
   function plural(count, noun) {
     return `${count} ${noun}${count !== 1 ? 's' : ''}`;
   }
@@ -236,6 +258,7 @@
     DOWNLOAD_EXTENSIONS,
     isDownloadableUrl,
     majorityShouldCheck,
+    fitMenuAxis,
     plural,
     filenameFromUrl,
     WHATS_NEW_VERSION,
