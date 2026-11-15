@@ -41,32 +41,126 @@
   transition: all 0.08s ease-out !important;
 }
 
-/* Action Menu */
+/* Action Menu
+ * Colours, sizes and the neon pulse follow Rob's mockup (menu-mockup.gif,
+ * 6 frames x 220 ms = 1.32 s loop). The keyframe stops are the mockup's six
+ * frames: border colour sampled from each frame; glow colour rgb(198, 7, 241);
+ * glow strength per frame measured and normalised to the brightest frame
+ * (3 of 6, at 440 ms) = 0, 0.415, 1, 0.587, 0.169, 0.009. The shadow layers
+ * were tuned in Firefox to the mockup's falloff (outside and inside the edge).
+ */
 .snaplinkit-menu {
   position: fixed;
-  background: #1a1a2e;
-  border: 1px solid #bf00ff;
-  border-radius: 8px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), 0 0 15px rgba(191, 0, 255, 0.3);
+  background: #130e22;
+  border: 1.5px solid #8418b1;
+  border-radius: 12px;
   z-index: 2147483647;
   min-width: 200px;
   overflow: hidden;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  line-height: 1.2;
+  animation: snaplinkit-neon 1.32s linear infinite;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4),
+              0 0 3px 2px rgba(198, 7, 241, 0), 0 0 9px 4px rgba(198, 7, 241, 0),
+              0 0 16px 4px rgba(198, 7, 241, 0),
+              inset 0 0 4px 3px rgba(198, 7, 241, 0), inset 0 0 12px 4px rgba(198, 7, 241, 0);
+}
+
+@keyframes snaplinkit-neon {
+  0%, 100% {
+    border-color: #8418b1;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4),
+                0 0 3px 2px rgba(198, 7, 241, 0), 0 0 9px 4px rgba(198, 7, 241, 0),
+                0 0 16px 4px rgba(198, 7, 241, 0),
+                inset 0 0 4px 3px rgba(198, 7, 241, 0), inset 0 0 12px 4px rgba(198, 7, 241, 0);
+  }
+  16.667% {
+    border-color: #f16bfa;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4),
+                0 0 3px 2px rgba(198, 7, 241, 0.415), 0 0 9px 4px rgba(198, 7, 241, 0.332),
+                0 0 16px 4px rgba(198, 7, 241, 0.124),
+                inset 0 0 4px 3px rgba(198, 7, 241, 0.415), inset 0 0 12px 4px rgba(198, 7, 241, 0.207);
+  }
+  33.333% {
+    border-color: #f8f7f9;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4),
+                0 0 3px 2px rgba(198, 7, 241, 1), 0 0 9px 4px rgba(198, 7, 241, 0.8),
+                0 0 16px 4px rgba(198, 7, 241, 0.3),
+                inset 0 0 4px 3px rgba(198, 7, 241, 1), inset 0 0 12px 4px rgba(198, 7, 241, 0.5);
+  }
+  50% {
+    border-color: #fa9cfd;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4),
+                0 0 3px 2px rgba(198, 7, 241, 0.587), 0 0 9px 4px rgba(198, 7, 241, 0.47),
+                0 0 16px 4px rgba(198, 7, 241, 0.176),
+                inset 0 0 4px 3px rgba(198, 7, 241, 0.587), inset 0 0 12px 4px rgba(198, 7, 241, 0.293);
+  }
+  66.667% {
+    border-color: #bf1ede;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4),
+                0 0 3px 2px rgba(198, 7, 241, 0.169), 0 0 9px 4px rgba(198, 7, 241, 0.135),
+                0 0 16px 4px rgba(198, 7, 241, 0.051),
+                inset 0 0 4px 3px rgba(198, 7, 241, 0.169), inset 0 0 12px 4px rgba(198, 7, 241, 0.085);
+  }
+  83.333% {
+    border-color: #7a1aa5;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4),
+                0 0 3px 2px rgba(198, 7, 241, 0.009), 0 0 9px 4px rgba(198, 7, 241, 0.007),
+                0 0 16px 4px rgba(198, 7, 241, 0.003),
+                inset 0 0 4px 3px rgba(198, 7, 241, 0.009), inset 0 0 12px 4px rgba(198, 7, 241, 0.004);
+  }
+}
+
+/* Reduced motion: keep the glow, steady, at the mockup's frame 2 of 6
+   (the frame closest to the loop's average brightness) */
+@media (prefers-reduced-motion: reduce) {
+  .snaplinkit-menu {
+    animation: none;
+    border-color: #f16bfa;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4),
+                0 0 3px 2px rgba(198, 7, 241, 0.415), 0 0 9px 4px rgba(198, 7, 241, 0.332),
+                0 0 16px 4px rgba(198, 7, 241, 0.124),
+                inset 0 0 4px 3px rgba(198, 7, 241, 0.415), inset 0 0 12px 4px rgba(198, 7, 241, 0.207);
+  }
 }
 
 .snaplinkit-menu-header {
-  padding: 10px 14px;
-  background: linear-gradient(135deg, #bf00ff22, #8000ff22);
-  border-bottom: 1px solid #bf00ff44;
-  font-size: 12px;
-  color: #bf00ff;
-  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 14px;
+  /* Translucent so the menu's inner glow shows through; over the menu's
+     #130e22 it composites to exactly #270f40 -> #2b1146 (the mockup's header) */
+  background: linear-gradient(180deg, rgba(99, 18, 154, 0.25), rgba(115, 26, 178, 0.25));
+  border-bottom: 1px solid #595868;
+}
+
+.snaplinkit-menu-header-icon {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+}
+
+.snaplinkit-menu-title {
+  color: #f8f7f9;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.snaplinkit-menu-hint {
+  color: #ee47f8;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.3;
+  margin-top: 2px;
 }
 
 .snaplinkit-menu-item {
-  padding: 12px 14px;
-  color: #e0e0e0;
+  padding: 8px 14px;
+  color: #f8f7f9;
   font-size: 14px;
+  line-height: 1.2;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -88,8 +182,8 @@
 }
 
 .snaplinkit-menu-item svg {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   flex-shrink: 0;
 }
 

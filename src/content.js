@@ -280,6 +280,11 @@
   // Menu icons as SVG shape lists, rendered with createElementNS (no innerHTML)
   const SVG_NS = 'http://www.w3.org/2000/svg';
   const ICONS = {
+    // Feather "link" (chain), drawn in the header
+    link: [
+      ['path', { d: 'M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71' }],
+      ['path', { d: 'M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71' }]
+    ],
     openTabs: [
       ['path', { d: 'M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6' }],
       ['polyline', { points: '15 3 21 3 21 9' }],
@@ -322,6 +327,32 @@
     return svg;
   }
 
+  // Header chain icon: the link shape stroked with a violet-to-pink gradient
+  // (falls back to a flat magenta if the gradient reference cannot resolve).
+  function chainIcon() {
+    const svg = svgIcon(ICONS.link);
+    svg.setAttribute('class', 'snaplinkit-menu-header-icon');
+    svg.setAttribute('stroke', 'url(#snaplinkit-link-gradient) #d53ef6');
+    svg.setAttribute('stroke-width', '2.5');
+    svg.setAttribute('stroke-linecap', 'round');
+    svg.setAttribute('stroke-linejoin', 'round');
+    const defs = document.createElementNS(SVG_NS, 'defs');
+    const gradient = document.createElementNS(SVG_NS, 'linearGradient');
+    gradient.setAttribute('id', 'snaplinkit-link-gradient');
+    for (const [name, value] of Object.entries({ x1: '0', y1: '1', x2: '1', y2: '0' })) {
+      gradient.setAttribute(name, value);
+    }
+    for (const [offset, color] of [['0', '#b239db'], ['0.5', '#d53ef6'], ['1', '#f05cfb']]) {
+      const stop = document.createElementNS(SVG_NS, 'stop');
+      stop.setAttribute('offset', offset);
+      stop.setAttribute('stop-color', color);
+      gradient.appendChild(stop);
+    }
+    defs.appendChild(gradient);
+    svg.insertBefore(defs, svg.firstChild);
+    return svg;
+  }
+
   function createLasso() {
     if (lassoEl && lassoEl.isConnected) return lassoEl;
     if (lassoEl) lassoEl.remove(); // body was replaced; rebuild
@@ -356,13 +387,17 @@
     // Header
     const header = document.createElement('div');
     header.className = 'snaplinkit-menu-header';
-    header.append(`${urls.length} link${urls.length !== 1 ? 's' : ''} selected`);
-    header.appendChild(document.createElement('br'));
-    const hint = document.createElement('small');
-    hint.style.opacity = '0.7';
-    hint.style.fontWeight = 'normal';
+    header.appendChild(chainIcon());
+    const headerText = document.createElement('div');
+    headerText.className = 'snaplinkit-menu-header-text';
+    const title = document.createElement('div');
+    title.className = 'snaplinkit-menu-title';
+    title.textContent = `${urls.length} link${urls.length !== 1 ? 's' : ''} selected`;
+    const hint = document.createElement('div');
+    hint.className = 'snaplinkit-menu-hint';
     hint.textContent = 'Alt+drag to remove, Shift+drag to add more';
-    header.appendChild(hint);
+    headerText.append(title, hint);
+    header.appendChild(headerText);
     menuEl.appendChild(header);
 
     // Menu items for links only
