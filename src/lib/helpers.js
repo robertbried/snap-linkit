@@ -163,6 +163,16 @@
     return { pos: Math.max(margin, pos), max: null };
   }
 
+  // Clamp one axis of a menu the user is dragging so it stays inside the
+  // visible area, with the same rule as fitMenuAxis: `margin` from both edges
+  // when there is room for it, otherwise the margin shrinks (down to 0).
+  //   pos    wanted start coordinate   size   menu size on this axis
+  //   space  visible size of the viewport on this axis
+  function clampMenuAxis(pos, size, space, margin) {
+    const m = Math.max(0, Math.min(margin, (space - size) / 2));
+    return Math.min(Math.max(pos, m), Math.max(m, space - size - m));
+  }
+
   function plural(count, noun) {
     return `${count} ${noun}${count !== 1 ? 's' : ''}`;
   }
@@ -259,6 +269,7 @@
     isDownloadableUrl,
     majorityShouldCheck,
     fitMenuAxis,
+    clampMenuAxis,
     plural,
     filenameFromUrl,
     WHATS_NEW_VERSION,

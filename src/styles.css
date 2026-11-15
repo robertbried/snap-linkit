@@ -133,6 +133,15 @@
      #130e22 it composites to exactly #270f40 -> #2b1146 (the mockup's header) */
   background: linear-gradient(180deg, rgba(99, 18, 154, 0.25), rgba(115, 26, 178, 0.25));
   border-bottom: 1px solid #595868;
+  cursor: grab;
+  user-select: none;
+}
+
+/* The header is the menu's drag handle (grab / grabbing cursor) */
+.snaplinkit-menu-dragging .snaplinkit-menu-header,
+.snaplinkit-menu-moving,
+.snaplinkit-menu-moving * {
+  cursor: grabbing !important;
 }
 
 .snaplinkit-menu-header-icon {

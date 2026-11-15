@@ -9,7 +9,7 @@
   // Pure helpers live in lib/helpers.js (loaded first by the manifest)
   const {
     isOpenableUrl, matchesPattern, rectsIntersect, selectionRect,
-    isDownloadableUrl, majorityShouldCheck, plural, fitMenuAxis
+    isDownloadableUrl, majorityShouldCheck, plural, fitMenuAxis, clampMenuAxis
   } = globalThis.SnapLinkitLib;
 
   // ============================================
@@ -22,6 +22,7 @@
   // Hardcoded (not configurable - frame timing)
   const FRAME_INTERVAL = 16;
   const MIN_DRAG_DISTANCE = 5; // Pixels to drag before activating selection (allows normal clicks)
+  const MENU_MARGIN = 10;      // Gap the action menu keeps from the window edges when it fits
 
   // ============================================
   // STATE
@@ -52,6 +53,7 @@
   let lassoEl = null;
   let menuEl = null;
   let confirmDialog = null; // { el, cancel } while the "Open N tabs?" confirm is showing
+  let menuDrag = null;      // { offsetX, offsetY, width, height, moved } while the menu is being dragged
 
   // ============================================
   // BROWSER API
@@ -398,6 +400,10 @@
     hint.textContent = 'Alt+drag to remove, Shift+drag to add more';
     headerText.append(title, hint);
     header.appendChild(headerText);
+    header.addEventListener('mousedown', startMenuDrag);
+    // A click on the header does nothing, and like the item clicks it stays
+    // inside the menu (the page does not see it)
+    header.addEventListener('click', (e) => e.stopPropagation());
     menuEl.appendChild(header);
 
     // Menu items for links only
@@ -458,20 +464,19 @@
     // taller; then height; then the final left from the final width (an
     // inner scrollbar can make it wider).
     const view = visibleArea();
-    const MARGIN = 10;
-    const widthFit = fitMenuAxis(x, menuEl.getBoundingClientRect().width, view.width, MARGIN);
+    const widthFit = fitMenuAxis(x, menuEl.getBoundingClientRect().width, view.width, MENU_MARGIN);
     if (widthFit.max !== null) {
       menuEl.style.minWidth = '0';
       menuEl.style.maxWidth = `${widthFit.max}px`;
     }
-    const heightFit = fitMenuAxis(y, menuEl.getBoundingClientRect().height, view.height, MARGIN);
+    const heightFit = fitMenuAxis(y, menuEl.getBoundingClientRect().height, view.height, MENU_MARGIN);
     if (heightFit.max !== null) {
       // Taller than the window: cap it and let it scroll inside itself
       menuEl.style.maxHeight = `${heightFit.max}px`;
       menuEl.style.overflowY = 'auto';
       menuEl.style.overscrollBehavior = 'contain';
     }
-    const leftFit = fitMenuAxis(x, menuEl.getBoundingClientRect().width, view.width, MARGIN);
+    const leftFit = fitMenuAxis(x, menuEl.getBoundingClientRect().width, view.width, MENU_MARGIN);
 
     menuEl.style.left = `${leftFit.pos}px`;
     menuEl.style.top = `${heightFit.pos}px`;
@@ -494,7 +499,71 @@
     };
   }
 
+  // ---- Moving the menu: left-drag on its header ----
+  // The menu follows the pointer and is clamped to the visible area on every
+  // move (clampMenuAxis, same margins as the placement above). The drag never
+  // closes the menu or touches the selection; the click that ends a drag is
+  // swallowed so it cannot count as an outside click. A click without movement
+  // does nothing. The position is not remembered: every new menu is placed at
+  // the pointer again.
+  function startMenuDrag(e) {
+    if (e.button !== 0 || !menuEl) return;
+    e.preventDefault(); // no text selection, no focus change
+    const rect = menuEl.getBoundingClientRect();
+    menuDrag = {
+      offsetX: e.clientX - rect.left,
+      offsetY: e.clientY - rect.top,
+      width: rect.width,
+      height: rect.height,
+      moved: false
+    };
+    menuEl.classList.add('snaplinkit-menu-dragging');
+    document.body.classList.add('snaplinkit-menu-moving');
+    document.addEventListener('mousemove', onMenuDragMove, true);
+    document.addEventListener('mouseup', endMenuDrag, true);
+  }
+
+  function onMenuDragMove(e) {
+    if (!menuDrag || !menuEl) return;
+    // Button released outside the window: the mouseup never arrived
+    if ((e.buttons & 1) === 0) {
+      endMenuDrag();
+      return;
+    }
+    e.preventDefault();
+    const view = visibleArea();
+    const left = clampMenuAxis(e.clientX - menuDrag.offsetX, menuDrag.width, view.width, MENU_MARGIN);
+    const top = clampMenuAxis(e.clientY - menuDrag.offsetY, menuDrag.height, view.height, MENU_MARGIN);
+    menuEl.style.left = `${left}px`;
+    menuEl.style.top = `${top}px`;
+    menuDrag.moved = true;
+  }
+
+  function endMenuDrag(e) {
+    if (!menuDrag) return;
+    const moved = menuDrag.moved;
+    menuDrag = null;
+    document.removeEventListener('mousemove', onMenuDragMove, true);
+    document.removeEventListener('mouseup', endMenuDrag, true);
+    document.body.classList.remove('snaplinkit-menu-moving');
+    if (menuEl) menuEl.classList.remove('snaplinkit-menu-dragging');
+    if (moved && e) {
+      // The click that follows this mouseup may land outside the menu (the
+      // pointer can pass the clamped edge); it must not close the menu or
+      // reach the page as a click.
+      window.addEventListener('click', swallowClick, true);
+      setTimeout(() => window.removeEventListener('click', swallowClick, true), 0);
+    }
+  }
+
+  function swallowClick(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    window.removeEventListener('click', swallowClick, true);
+  }
+
   function hideMenu() {
+    endMenuDrag();
     if (menuEl) {
       menuEl.remove();
       menuEl = null;

@@ -7,7 +7,7 @@ const lib = require('../src/lib/helpers.js');
 test('SnapLinkitLib exposes every helper and is frozen', () => {
   assert.deepEqual(Object.keys(lib).sort(), [
     'DOWNLOAD_EXTENSIONS', 'OPENABLE_PROTOCOLS', 'WHATS_NEW_SHORTCUTS', 'WHATS_NEW_VERSION',
-    'blacklistBytes', 'filenameFromUrl', 'fitMenuAxis', 'formatShortcut', 'isDownloadableUrl', 'isOpenableUrl',
+    'blacklistBytes', 'clampMenuAxis', 'filenameFromUrl', 'fitMenuAxis', 'formatShortcut', 'isDownloadableUrl', 'isOpenableUrl',
     'isValidPattern', 'isVersionBefore', 'majorityShouldCheck', 'matchesPattern', 'plural',
     'rectsIntersect', 'selectionRect', 'shouldOfferWhatsNew', 'whatsNewLines',
   ]);
@@ -234,6 +234,31 @@ test('fitMenuAxis: result always lies inside the space; inside the margins unles
           assert.ok(pos >= 10 && pos + used <= space - 10 + 1e-9, `margin: pos ${pos} end ${pos + used} ${where}`);
         }
         assert.equal(max === null, size <= space, `capped iff larger than the space: ${where}`);
+      }
+    }
+  }
+});
+
+test('clampMenuAxis: dragged menu stays at the wanted spot inside the margins, else clamps to them', () => {
+  assert.equal(lib.clampMenuAxis(300, 220, 1000, 10), 300);
+  assert.equal(lib.clampMenuAxis(-500, 220, 1000, 10), 10);
+  assert.equal(lib.clampMenuAxis(5000, 220, 1000, 10), 770);         // 1000 - 10 - 220
+  assert.equal(lib.clampMenuAxis(0, 207, 227, 10), 10);              // capped menu (P2-3): exactly one place
+  assert.equal(lib.clampMenuAxis(50, 207, 227, 10), 10);
+  // fits only with shrunk margins: equal margins of 3, as fitMenuAxis placed it (no room to move on this axis)
+  assert.equal(lib.clampMenuAxis(-5, 221, 227, 10), 3);
+  assert.equal(lib.clampMenuAxis(99, 221, 227, 10), 3);
+});
+
+test('clampMenuAxis: result always inside the space, and agrees with fitMenuAxis placements (sweep)', () => {
+  for (const space of [60, 227, 300, 715, 1000]) {
+    for (const size0 of [40, 187, 221, 257, 900]) {
+      const { pos: placed, max } = lib.fitMenuAxis(space / 2, size0, space, 10);
+      const size = max === null ? size0 : max;               // size after P2-3 placement
+      assert.equal(lib.clampMenuAxis(placed, size, space, 10), placed, `placement kept: space ${space} size ${size}`);
+      for (const want of [-1000, -1, 0, 7, space / 3, space - 1, space + 1000]) {
+        const pos = lib.clampMenuAxis(want, size, space, 10);
+        assert.ok(pos >= 0 && pos + size <= space + 1e-9, `space ${space} size ${size} want ${want} -> ${pos}`);
       }
     }
   }
