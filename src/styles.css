@@ -51,6 +51,9 @@
  */
 .snaplinkit-menu {
   position: fixed;
+  /* The P2-3 height/width caps (max-height/max-width) then include the
+     border, so a capped menu sits exactly MENU_MARGIN from the window edges */
+  box-sizing: border-box;
   background: #130e22;
   border: 1.5px solid #8418b1;
   border-radius: 12px;
