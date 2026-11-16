@@ -7,7 +7,7 @@
   'use strict';
 
   // Pure helpers live in lib/helpers.js (loaded first by popup.html)
-  const { isValidPattern, blacklistBytes, whatsNewLines } = globalThis.SnapLinkitLib;
+  const { isValidPattern, blacklistBytes, whatsNewLines, normalizeReleaseAction } = globalThis.SnapLinkitLib;
 
   const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
 
@@ -69,6 +69,9 @@
     elements.autoScrollSpeedValue = document.getElementById('autoScrollSpeedValue');
     elements.maxTabsWithoutConfirmValue = document.getElementById('maxTabsWithoutConfirmValue');
     elements.tabOpenDelayValue = document.getElementById('tabOpenDelayValue');
+
+    // When I let go
+    elements.releaseAction = document.getElementById('releaseAction');
 
     // Blacklist
     elements.blacklistMode = document.getElementById('blacklistMode');
@@ -172,6 +175,14 @@
       });
     }
 
+    // When I let go dropdown
+    if (elements.releaseAction) {
+      elements.releaseAction.addEventListener('change', (e) => {
+        currentSettings.releaseAction = normalizeReleaseAction(e.target.value);
+        saveSettings();
+      });
+    }
+
     // Blacklist mode dropdown
     if (elements.blacklistMode) {
       elements.blacklistMode.addEventListener('change', (e) => {
@@ -227,6 +238,13 @@
     // On/off toggle
     if (elements.extensionEnabled) {
       elements.extensionEnabled.checked = currentSettings.extensionEnabled !== false;
+    }
+
+    // When I let go: an unknown stored value shows as the default and is
+    // written back as the default with the next save
+    currentSettings.releaseAction = normalizeReleaseAction(currentSettings.releaseAction);
+    if (elements.releaseAction) {
+      elements.releaseAction.value = currentSettings.releaseAction;
     }
 
     // Update blacklist mode

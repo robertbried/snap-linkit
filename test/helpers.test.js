@@ -6,9 +6,9 @@ const lib = require('../src/lib/helpers.js');
 
 test('SnapLinkitLib exposes every helper and is frozen', () => {
   assert.deepEqual(Object.keys(lib).sort(), [
-    'DOWNLOAD_EXTENSIONS', 'OPENABLE_PROTOCOLS', 'WHATS_NEW_SHORTCUTS', 'WHATS_NEW_VERSION',
+    'DOWNLOAD_EXTENSIONS', 'OPENABLE_PROTOCOLS', 'RELEASE_ACTIONS', 'WHATS_NEW_SHORTCUTS', 'WHATS_NEW_VERSION',
     'blacklistBytes', 'clampMenuAxis', 'filenameFromUrl', 'fitMenuAxis', 'formatShortcut', 'isDownloadableUrl', 'isOpenableUrl',
-    'isValidPattern', 'isVersionBefore', 'majorityShouldCheck', 'matchesPattern', 'plural',
+    'isValidPattern', 'isVersionBefore', 'majorityShouldCheck', 'matchesPattern', 'normalizeReleaseAction', 'plural',
     'rectsIntersect', 'selectionRect', 'shouldOfferWhatsNew', 'whatsNewLines',
   ]);
   assert.ok(Object.isFrozen(lib));
@@ -261,5 +261,17 @@ test('clampMenuAxis: result always inside the space, and agrees with fitMenuAxis
         assert.ok(pos >= 0 && pos + size <= space + 1e-9, `space ${space} size ${size} want ${want} -> ${pos}`);
       }
     }
+  }
+});
+
+test('RELEASE_ACTIONS: the four "When I let go" values, frozen', () => {
+  assert.deepEqual([...lib.RELEASE_ACTIONS], ['open', 'openUnloaded', 'copyUrls', 'menu']);
+  assert.ok(Object.isFrozen(lib.RELEASE_ACTIONS));
+});
+
+test('normalizeReleaseAction: known values kept, anything else is the default "open"', () => {
+  for (const v of lib.RELEASE_ACTIONS) assert.equal(lib.normalizeReleaseAction(v), v);
+  for (const v of [undefined, null, '', 'OPEN', 'Open in new tabs', 'copy', 'menu ', 0, 1, true, {}, ['menu']]) {
+    assert.equal(lib.normalizeReleaseAction(v), 'open', JSON.stringify(v));
   }
 });

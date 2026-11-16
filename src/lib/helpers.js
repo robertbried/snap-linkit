@@ -173,6 +173,15 @@
     return Math.min(Math.max(pos, m), Math.max(m, space - size - m));
   }
 
+  // "When I let go": what a plain release over links does. Ctrl at release
+  // and Shift/Alt drags always show the menu, whatever this says.
+  const RELEASE_ACTIONS = Object.freeze(['open', 'openUnloaded', 'copyUrls', 'menu']);
+  // A stored value that is not one of RELEASE_ACTIONS (missing, older or
+  // hand-edited) counts as the default, 'open'.
+  function normalizeReleaseAction(value) {
+    return RELEASE_ACTIONS.includes(value) ? value : 'open';
+  }
+
   function plural(count, noun) {
     return `${count} ${noun}${count !== 1 ? 's' : ''}`;
   }
@@ -270,6 +279,8 @@
     majorityShouldCheck,
     fitMenuAxis,
     clampMenuAxis,
+    RELEASE_ACTIONS,
+    normalizeReleaseAction,
     plural,
     filenameFromUrl,
     WHATS_NEW_VERSION,

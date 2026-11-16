@@ -13,5 +13,7 @@ globalThis.SnapLinkitDefaults = function SnapLinkitDefaults() {
     blacklist: [],
     blacklistMode: 'blacklist',
     extensionEnabled: true,
+    // What a plain right-drag release over links does (lib/helpers.js RELEASE_ACTIONS)
+    releaseAction: 'open',
   };
 };

@@ -702,6 +702,19 @@
     <!-- Tab Settings -->
     <div class="setting-group">
       <div class="section-title">Tab Opening</div>
+      <!-- What a plain right-drag release does (releaseAction); Ctrl at release always shows the menu.
+           Same row/label style as "Confirm at" below; the dropdown keeps the existing select style. -->
+      <div class="setting-row">
+        <div class="setting-label">
+          <span>When I let go</span>
+          <select id="releaseAction" class="mode-select">
+            <option value="open">Open in new tabs</option>
+            <option value="openUnloaded">Open unloaded</option>
+            <option value="copyUrls">Copy links</option>
+            <option value="menu">Show the menu</option>
+          </select>
+        </div>
+      </div>
       <div class="setting-row">
         <div class="setting-label">
           <span>Confirm at</span>
