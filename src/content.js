@@ -10,7 +10,7 @@
   const {
     isOpenableUrl, matchesPattern, rectsIntersect, selectionRect,
     isDownloadableUrl, majorityShouldCheck, plural, fitMenuAxis, clampMenuAxis,
-    normalizeReleaseAction
+    normalizeReleaseAction, dragModifierMode
   } = globalThis.SnapLinkitLib;
 
   // ============================================
@@ -398,7 +398,7 @@
     title.textContent = `${urls.length} link${urls.length !== 1 ? 's' : ''} selected`;
     const hint = document.createElement('div');
     hint.className = 'snaplinkit-menu-hint';
-    hint.textContent = 'Alt+drag to remove, Shift+drag to add more';
+    hint.textContent = 'Alt+drag to remove, Ctrl+drag to add more';
     headerText.append(title, hint);
     header.appendChild(headerText);
     header.addEventListener('mousedown', startMenuDrag);
@@ -970,7 +970,8 @@
     state.startScrollY = window.scrollY;
     state.currentX = e.clientX;
     state.currentY = e.clientY;
-    state.modifierMode = e.shiftKey ? 'add' : (e.altKey ? 'remove' : null);
+    // Ctrl (or, unadvertised, Shift) = add, Alt = remove: see dragModifierMode
+    state.modifierMode = dragModifierMode(e);
 
     // Don't block context menu yet - only block if we actually drag
     // blockNextContextMenu will be set to true in onMouseMove when drag threshold is reached
@@ -1065,9 +1066,10 @@
     // Links: a plain drag does what "When I let go" says (releaseAction),
     // through the same calls as the menu's items, so the Confirm-at dialog
     // still applies to both Open choices. The menu appears instead when Ctrl
-    // is held at release, or after a Shift (add) / Alt (remove) drag, which
-    // build a selection up over several drags. Checkboxes or buttons in a
-    // mixed selection are left alone, as before.
+    // is held at release, or after an add (Ctrl or Shift held as the drag
+    // starts) or remove (Alt) drag, which build a selection up over several
+    // drags. Checkboxes or buttons in a mixed selection are left alone, as
+    // before.
     if (links.length > 0) {
       if (e.ctrlKey || state.modifierMode) {
         showMenu(e.clientX, e.clientY);

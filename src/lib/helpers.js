@@ -174,12 +174,30 @@
   }
 
   // "When I let go": what a plain release over links does. Ctrl at release
-  // and Shift/Alt drags always show the menu, whatever this says.
+  // and add/remove drags (dragModifierMode) always show the menu, whatever
+  // this says.
   const RELEASE_ACTIONS = Object.freeze(['open', 'openUnloaded', 'copyUrls', 'menu']);
   // A stored value that is not one of RELEASE_ACTIONS (missing, older or
   // hand-edited) counts as the default, 'open'.
   function normalizeReleaseAction(value) {
     return RELEASE_ACTIONS.includes(value) ? value : 'open';
+  }
+
+  // How a right-drag edits the selection, from the modifier keys held as it
+  // starts (a mousedown event, or any { ctrlKey, shiftKey, altKey }):
+  //   'add'     Ctrl (advertised since P2-9), or Shift (the old key, kept
+  //             working but no longer advertised: Firefox always shows its
+  //             own context menu after a Shift+right-click, and pages cannot
+  //             cancel it)
+  //   'remove'  Alt
+  //   null      none of these: a fresh selection
+  // Shift and Alt win over Ctrl, so every combination that worked before
+  // P2-9 (Shift+Alt = add, Ctrl+Alt = remove) does the same thing now.
+  function dragModifierMode(keys) {
+    if (!keys) return null;
+    if (keys.shiftKey) return 'add';
+    if (keys.altKey) return 'remove';
+    return keys.ctrlKey ? 'add' : null;
   }
 
   function plural(count, noun) {
@@ -281,6 +299,7 @@
     clampMenuAxis,
     RELEASE_ACTIONS,
     normalizeReleaseAction,
+    dragModifierMode,
     plural,
     filenameFromUrl,
     WHATS_NEW_VERSION,

@@ -7,7 +7,7 @@ const lib = require('../src/lib/helpers.js');
 test('SnapLinkitLib exposes every helper and is frozen', () => {
   assert.deepEqual(Object.keys(lib).sort(), [
     'DOWNLOAD_EXTENSIONS', 'OPENABLE_PROTOCOLS', 'RELEASE_ACTIONS', 'WHATS_NEW_SHORTCUTS', 'WHATS_NEW_VERSION',
-    'blacklistBytes', 'clampMenuAxis', 'filenameFromUrl', 'fitMenuAxis', 'formatShortcut', 'isDownloadableUrl', 'isOpenableUrl',
+    'blacklistBytes', 'clampMenuAxis', 'dragModifierMode', 'filenameFromUrl', 'fitMenuAxis', 'formatShortcut', 'isDownloadableUrl', 'isOpenableUrl',
     'isValidPattern', 'isVersionBefore', 'majorityShouldCheck', 'matchesPattern', 'normalizeReleaseAction', 'plural',
     'rectsIntersect', 'selectionRect', 'shouldOfferWhatsNew', 'whatsNewLines',
   ]);
@@ -274,4 +274,20 @@ test('normalizeReleaseAction: known values kept, anything else is the default "o
   for (const v of [undefined, null, '', 'OPEN', 'Open in new tabs', 'copy', 'menu ', 0, 1, true, {}, ['menu']]) {
     assert.equal(lib.normalizeReleaseAction(v), 'open', JSON.stringify(v));
   }
+});
+
+test('dragModifierMode: Ctrl or Shift held as the drag starts = add, Alt = remove, nothing = fresh', () => {
+  const k = (ctrlKey, shiftKey, altKey) => ({ ctrlKey, shiftKey, altKey });
+  assert.equal(lib.dragModifierMode(k(false, false, false)), null);
+  assert.equal(lib.dragModifierMode(k(true, false, false)), 'add');    // P2-9: Ctrl adds
+  assert.equal(lib.dragModifierMode(k(false, true, false)), 'add');    // Shift still adds (unadvertised alias)
+  assert.equal(lib.dragModifierMode(k(false, false, true)), 'remove');
+  // Combinations keep their pre-P2-9 meaning: Shift, then Alt, win over Ctrl
+  assert.equal(lib.dragModifierMode(k(true, true, false)), 'add');
+  assert.equal(lib.dragModifierMode(k(false, true, true)), 'add');
+  assert.equal(lib.dragModifierMode(k(true, false, true)), 'remove'); // Ctrl+Alt (AltGr on many layouts) stays remove
+  assert.equal(lib.dragModifierMode(k(true, true, true)), 'add');
+  // metaKey (Windows/Command key) is not a modifier here
+  assert.equal(lib.dragModifierMode({ metaKey: true }), null);
+  for (const v of [undefined, null, {}]) assert.equal(lib.dragModifierMode(v), null);
 });
