@@ -230,17 +230,33 @@
       border: 1px solid #bf00ff44;
     }
 
+    /* Tighter spacing around the Privacy box so the Info tab fits without scrolling */
+    .privacy-section {
+      padding-top: 6px;
+      padding-bottom: 6px;
+    }
+
+    /* Lock icon beside the heading (flex row), the text on its own full-width line below */
     .privacy-badge {
       background: linear-gradient(135deg, #00ff8822, #00aa5522);
       border: 1px solid #00ff8844;
       border-radius: 6px;
-      padding: 8px;
+      padding: 4px 8px;
       text-align: center;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      align-items: center;
+      column-gap: 6px;
     }
 
     .privacy-badge .icon {
       font-size: 16px;
-      margin-bottom: 2px;
+      line-height: 18px;
+    }
+
+    .privacy-badge .text {
+      flex-basis: 100%;
     }
 
     .privacy-badge .title {
@@ -628,12 +644,20 @@
       </div>
       <div class="instruction">
         <div class="step-num">2</div>
-        <div class="step-text">Release to see the action menu with options to open, copy, or download.</div>
+        <div class="step-text">Let go to open the links in new tabs. To change this: Settings &gt; When I let go.</div>
+      </div>
+      <div class="instruction">
+        <div class="step-num">3</div>
+        <div class="step-text">"Open unloaded": tabs appear but don't load until you click them. Saves memory.</div>
       </div>
     </div>
 
     <div class="section">
       <div class="section-title">Shortcuts</div>
+      <div class="shortcut">
+        <span>Show the menu</span>
+        <span class="key">Ctrl + Let go</span>
+      </div>
       <div class="shortcut">
         <span>Add to selection</span>
         <span class="key">Ctrl + Drag</span>
@@ -643,7 +667,7 @@
         <span class="key">Alt + Drag</span>
       </div>
       <div class="shortcut">
-        <span>Copy selected URLs</span>
+        <span>Copy selected links</span>
         <span class="key">Ctrl + C</span>
       </div>
       <div class="shortcut">
@@ -651,7 +675,7 @@
         <span class="key">Esc</span>
       </div>
       <div class="shortcut">
-        <span>Toggle extension</span>
+        <span>Turn on or off</span>
         <span class="key">Alt + Shift + L</span>
       </div>
       <div class="shortcut">
@@ -660,7 +684,7 @@
       </div>
     </div>
 
-    <div class="section">
+    <div class="section privacy-section">
       <div class="privacy-badge">
         <div class="icon">&#128274;</div>
         <div class="title">Privacy 100% Guaranteed</div>
@@ -706,8 +730,8 @@
            Same row/label style as "Confirm at" below; the dropdown keeps the existing select style. -->
       <div class="setting-row">
         <div class="setting-label">
-          <span>When I let go</span>
-          <select id="releaseAction" class="mode-select">
+          <span title="Open in new tabs: the pages load right away. Open unloaded: the tabs appear but don't load until you click them. This saves memory.">When I let go</span>
+          <select id="releaseAction" class="mode-select" title="Open in new tabs: the pages load right away. Open unloaded: the tabs appear but don't load until you click them. This saves memory.">
             <option value="open">Open in new tabs</option>
             <option value="openUnloaded">Open unloaded</option>
             <option value="copyUrls">Copy links</option>

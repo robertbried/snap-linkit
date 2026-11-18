@@ -421,9 +421,9 @@
         action: () => openTabs(urls, true)
       },
       {
-        label: 'Copy URLs to Clipboard',
+        label: 'Copy Links',
         icon: ICONS.copyUrls,
-        action: () => copyToClipboard(urls.join('\n'), 'URLs copied!')
+        action: () => copyToClipboard(urls.join('\n'), 'Links copied!')
       },
       {
         label: 'Copy Link Text',
@@ -1083,7 +1083,7 @@
               openTabs(urls, true);
               break;
             case 'copyUrls':
-              copyToClipboard(urls.join('\n'), 'URLs copied!');
+              copyToClipboard(urls.join('\n'), 'Links copied!');
               break;
             case 'menu':
               showMenu(e.clientX, e.clientY);
@@ -1104,7 +1104,7 @@
       const urls = getUniqueUrls();
       if (urls.length > 0) {
         e.preventDefault();
-        copyToClipboard(urls.join('\n'), 'URLs copied!');
+        copyToClipboard(urls.join('\n'), 'Links copied!');
       }
     }
 
