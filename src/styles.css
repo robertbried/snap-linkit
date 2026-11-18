@@ -43,10 +43,12 @@
 
 /* Action Menu
  * Colours, sizes and the neon pulse follow Rob's mockup (menu-mockup.gif,
- * 6 frames x 220 ms = 1.32 s loop). The keyframe stops are the mockup's six
+ * 6 frames x 220 ms = 1.32 s loop), except the speed: the loop is 2.6 s,
+ * Rob's choice after his Windows check (P2-11: calmer, a reminder that the
+ * menu is open, not an alert). The keyframe stops are the mockup's six
  * frames: border colour sampled from each frame; glow colour rgb(198, 7, 241);
  * glow strength per frame measured and normalised to the brightest frame
- * (3 of 6, at 440 ms) = 0, 0.415, 1, 0.587, 0.169, 0.009. The shadow layers
+ * (3 of 6, a third into the loop) = 0, 0.415, 1, 0.587, 0.169, 0.009. The shadow layers
  * were tuned in Firefox to the mockup's falloff (outside and inside the edge).
  */
 .snaplinkit-menu {
@@ -62,7 +64,7 @@
   overflow: hidden;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   line-height: 1.2;
-  animation: snaplinkit-neon 1.32s linear infinite;
+  animation: snaplinkit-neon 2.6s linear infinite;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4),
               0 0 3px 2px rgba(198, 7, 241, 0), 0 0 9px 4px rgba(198, 7, 241, 0),
               0 0 16px 4px rgba(198, 7, 241, 0),
