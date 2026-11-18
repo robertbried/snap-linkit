@@ -626,14 +626,18 @@
 
   <!-- Info Tab Content -->
   <div class="tab-content" id="content-info">
-    <!-- What's new (1.3.0 shortcut change): popup.js fills the lines from commands.getAll -->
+    <!-- What's new (1.4.0): shown by popup.js until "Got it". For updates from before 1.3.0,
+         popup.js adds the 1.3.0 shortcut lines (from commands.getAll) in whatsNewLines. -->
     <div class="whats-new" id="whatsNew" hidden>
       <div class="whats-new-head">
-        <strong>New keyboard shortcuts</strong>
+        <strong>New in 1.4.0</strong>
         <button class="add-btn" id="whatsNewDismiss">Got it</button>
       </div>
+      <div>Letting go now opens the links right away.</div>
+      <div>To choose what happens instead: Settings &gt; Tab Opening &gt; When I let go. Pick "Show the menu" for the old way.</div>
+      <div>Hold Ctrl as you let go to see the menu.</div>
+      <div>Hold Ctrl as you start a drag to add more links.</div>
       <div id="whatsNewLines"></div>
-      <div>The old ones didn't always work.</div>
     </div>
 
     <div class="section">

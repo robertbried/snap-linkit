@@ -234,11 +234,14 @@
     return cleaned || 'download';
   }
 
-  // ---- "What's new" notice for the 1.3.0 shortcut change ----
-  // The version that changed the defaults, and the new defaults. A command
+  // ---- "What's new" notice (1.4.0: letting go acts at once) ----
+  // WHATS_NEW_VERSION: an update from any version before it gets the note.
+  // People updating from before 1.3.0 also get the 1.3.0 shortcut lines: the
+  // version that changed the defaults, and the new defaults. A command
   // whose current shortcut still equals its entry here is one the user saw
   // change; a customised or cleared shortcut did not change for them.
-  const WHATS_NEW_VERSION = '1.3.0';
+  const WHATS_NEW_VERSION = '1.4.0';
+  const WHATS_NEW_SHORTCUTS_VERSION = '1.3.0';
   const WHATS_NEW_SHORTCUTS = Object.freeze([
     Object.freeze({ name: 'toggle-extension', label: 'Turn Snap Linkit on or off', shortcut: 'Alt+Shift+L' }),
     Object.freeze({ name: 'open-selected-tabs', label: 'Open selected links', shortcut: 'Alt+Shift+Comma' }),
@@ -258,7 +261,7 @@
   }
 
   // runtime.onInstalled details -> offer the notice? Only an update from a
-  // version before 1.3.0. Installs, browser updates and reloads of the same
+  // version before 1.4.0. Installs, browser updates and reloads of the same
   // version are excluded; temporary loads are deliberately not.
   function shouldOfferWhatsNew(details) {
     return Boolean(details) && details.reason === 'update' &&
@@ -273,6 +276,23 @@
     return String(shortcut).split('+')
       .map((part) => (isMac && MAC_KEY_NAMES[part]) || (part === 'MacCtrl' ? 'Control' : part))
       .join(' + ');
+  }
+
+  // storage.local "whatsNew" record for an update from previousVersion.
+  // shortcuts: also show the 1.3.0 shortcut lines, for an update from before
+  // 1.3.0 or when a 1.3.0 note was still waiting for "Got it" (pending).
+  function whatsNewRecord(previousVersion, pending) {
+    return {
+      version: WHATS_NEW_VERSION,
+      badge: true,
+      shortcuts: isVersionBefore(previousVersion, WHATS_NEW_SHORTCUTS_VERSION) || whatsNewShowsShortcuts(pending),
+    };
+  }
+
+  // Does a stored record ask for the shortcut lines? A 1.3.0 record (written
+  // by 1.3.0, no shortcuts field) was a shortcut note, so it does.
+  function whatsNewShowsShortcuts(record) {
+    return Boolean(record) && (record.shortcuts === true || record.version === WHATS_NEW_SHORTCUTS_VERSION);
   }
 
   // commands.getAll() result -> note lines, one per command still on its new
@@ -306,6 +326,8 @@
     WHATS_NEW_SHORTCUTS,
     isVersionBefore,
     shouldOfferWhatsNew,
+    whatsNewRecord,
+    whatsNewShowsShortcuts,
     formatShortcut,
     whatsNewLines,
   });

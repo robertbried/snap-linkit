@@ -7,7 +7,7 @@ const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
 
 // Pure helpers live in lib/helpers.js (loaded first by the manifest)
 const {
-  isOpenableUrl, filenameFromUrl, shouldOfferWhatsNew, whatsNewLines, WHATS_NEW_VERSION, isVersionBefore
+  isOpenableUrl, filenameFromUrl, shouldOfferWhatsNew, whatsNewRecord, isVersionBefore
 } = globalThis.SnapLinkitLib;
 
 // ============================================
@@ -28,14 +28,14 @@ browserAPI.commands.onCommand.addListener(async (command) => {
 });
 
 // ============================================
-// "WHAT'S NEW" NOTICE (1.3.0 shortcut change)
+// "WHAT'S NEW" NOTICE (1.4.0; plus the 1.3.0 shortcut lines for older versions)
 // ============================================
-// storage.local "whatsNew" = { version, badge }. Set here on an update from
-// before 1.3.0; popup.js sets badge to false when the popup first opens and
-// removes the key on "Got it". The toolbar badge does not survive a browser
-// restart, so onStartup puts it back while badge is still true. Both
+// storage.local "whatsNew" = { version, badge, shortcuts }. Set here on an
+// update from before 1.4.0; popup.js sets badge to false when the popup first
+// opens and removes the key on "Got it". The toolbar badge does not survive a
+// browser restart, so onStartup puts it back while badge is still true. Both
 // listeners are registered at the top level so the background page wakes.
-const WHATS_NEW_TITLE = 'Snap Linkit: new keyboard shortcuts';
+const WHATS_NEW_TITLE = "Snap Linkit: see what's new";
 
 async function showWhatsNewBadge() {
   await browserAPI.action.setBadgeText({ text: 'NEW' });
@@ -44,11 +44,10 @@ async function showWhatsNewBadge() {
   await browserAPI.action.setTitle({ title: WHATS_NEW_TITLE });
 }
 
-async function offerWhatsNew() {
-  // Nothing changed for a user who customised or cleared both shortcuts
-  const commands = await browserAPI.commands.getAll();
-  if (whatsNewLines(commands, false).length === 0) return;
-  await browserAPI.storage.local.set({ whatsNew: { version: WHATS_NEW_VERSION, badge: true } });
+async function offerWhatsNew(previousVersion) {
+  // Replaces any note still waiting for "Got it", keeping its shortcut lines
+  const { whatsNew } = await browserAPI.storage.local.get('whatsNew');
+  await browserAPI.storage.local.set({ whatsNew: whatsNewRecord(previousVersion, whatsNew) });
   await showWhatsNewBadge();
 }
 
@@ -78,7 +77,7 @@ function clearLegacyAllUrlsGrant(details) {
 browserAPI.runtime.onInstalled.addListener((details) => {
   clearLegacyAllUrlsGrant(details);
   if (!shouldOfferWhatsNew(details)) return;
-  offerWhatsNew().catch((error) => {
+  offerWhatsNew(details.previousVersion).catch((error) => {
     console.warn("Snap Linkit: could not set up the what's new notice:", error?.message);
   });
 });

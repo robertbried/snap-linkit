@@ -7,7 +7,7 @@
   'use strict';
 
   // Pure helpers live in lib/helpers.js (loaded first by popup.html)
-  const { isValidPattern, blacklistBytes, whatsNewLines, normalizeReleaseAction } = globalThis.SnapLinkitLib;
+  const { isValidPattern, blacklistBytes, whatsNewLines, whatsNewShowsShortcuts, normalizeReleaseAction } = globalThis.SnapLinkitLib;
 
   const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
 
@@ -314,11 +314,12 @@
     }
   }
 
-  // ---- What's new note (1.3.0 shortcut change) ----
-  // background.js stores whatsNew = { version, badge } in storage.local on an
-  // update from before 1.3.0. Opening the popup clears the toolbar badge and
-  // tooltip; the note stays until "Got it". Lines are rebuilt from the
-  // current shortcuts, so one the user has customised since is left out.
+  // ---- What's new note (1.4.0, plus the 1.3.0 shortcut lines) ----
+  // background.js stores whatsNew = { version, badge, shortcuts } in
+  // storage.local on an update from before 1.4.0. Opening the popup clears the
+  // toolbar badge and tooltip; the note stays until "Got it". The 1.4.0 lines
+  // are in popup.html. The shortcut lines (update from before 1.3.0) are
+  // rebuilt from the current shortcuts, so one customised since is left out.
   async function clearWhatsNewBadge() {
     await browserAPI.action.setBadgeText({ text: '' });
     await browserAPI.action.setTitle({ title: null });
@@ -329,22 +330,20 @@
     try {
       const { whatsNew } = await browserAPI.storage.local.get('whatsNew');
       if (!whatsNew) return;
-      const [commands, platform] = await Promise.all([
-        browserAPI.commands.getAll(),
-        browserAPI.runtime.getPlatformInfo(),
-      ]);
-      const lines = whatsNewLines(commands, platform.os === 'mac');
-      if (lines.length === 0) {
-        // Both shortcuts customised or cleared since the update: nothing to announce
-        await browserAPI.storage.local.remove('whatsNew');
-        await clearWhatsNewBadge();
-        return;
-      }
       elements.whatsNewLines.replaceChildren();
-      for (const line of lines) {
-        const row = document.createElement('div');
-        row.textContent = line;
-        elements.whatsNewLines.appendChild(row);
+      if (whatsNewShowsShortcuts(whatsNew)) {
+        const [commands, platform] = await Promise.all([
+          browserAPI.commands.getAll(),
+          browserAPI.runtime.getPlatformInfo(),
+        ]);
+        const lines = whatsNewLines(commands, platform.os === 'mac');
+        // None left on its default (customised or cleared): no shortcut lines
+        if (lines.length > 0) lines.unshift('New keyboard shortcuts:');
+        for (const line of lines) {
+          const row = document.createElement('div');
+          row.textContent = line;
+          elements.whatsNewLines.appendChild(row);
+        }
       }
       elements.whatsNew.hidden = false;
       if (whatsNew.badge !== false) {
