@@ -322,7 +322,9 @@
   // rebuilt from the current shortcuts, so one customised since is left out.
   async function clearWhatsNewBadge() {
     await browserAPI.action.setBadgeText({ text: '' });
-    await browserAPI.action.setTitle({ title: null });
+    // Back to the manifest's tooltip. Not null: Firefox accepts null as "reset", but
+    // Chrome's action.setTitle requires a string and rejects null.
+    await browserAPI.action.setTitle({ title: browserAPI.runtime.getManifest().action.default_title });
   }
 
   async function showWhatsNew() {
