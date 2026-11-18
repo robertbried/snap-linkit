@@ -7,3 +7,4 @@ REVIEW.md
 node_modules/
 HANDOFF.md
 smoke-test.mjs
+dist/

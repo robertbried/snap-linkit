@@ -1,0 +1,68 @@
+{
+  "manifest_version": 3,
+  "name": "Snap Linkit",
+  "version": "1.4.0",
+  "description": "Select and manage multiple links, checkboxes, and buttons with a simple drag. Privacy 100% Guaranteed.",
+  "minimum_chrome_version": "110",
+  "permissions": [
+    "clipboardWrite",
+    "storage",
+    "downloads"
+  ],
+  "host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Snap Linkit",
+    "default_icon": {
+      "16": "images/icon16.png",
+      "32": "images/icon32.png",
+      "48": "images/icon48.png",
+      "128": "images/icon128-chrome.png"
+    }
+  },
+  "icons": {
+    "16": "images/icon16.png",
+    "32": "images/icon32.png",
+    "48": "images/icon48.png",
+    "128": "images/icon128-chrome.png"
+  },
+  "background": {
+    "service_worker": "sw.js"
+  },
+  "commands": {
+    "toggle-extension": {
+      "suggested_key": {
+        "default": "Alt+Shift+L",
+        "mac": "Alt+Shift+L"
+      },
+      "description": "Toggle Snap Linkit on/off (applies to all tabs)"
+    },
+    "open-selected-tabs": {
+      "suggested_key": {
+        "default": "Alt+Shift+Comma",
+        "mac": "Alt+Shift+Comma"
+      },
+      "description": "Open all selected links in new tabs"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "js": [
+        "defaults.js",
+        "lib/helpers.js",
+        "content.js"
+      ],
+      "css": [
+        "styles.css"
+      ],
+      "run_at": "document_end"
+    }
+  ]
+}

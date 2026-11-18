@@ -3,6 +3,7 @@
   "private": true,
   "scripts": {
     "test": "node --test \"test/**/*.test.js\"",
-    "lint": "npx --yes web-ext lint --source-dir src --no-input"
+    "lint": "npx --yes web-ext lint --source-dir src --no-input",
+    "build": "node build.mjs"
   }
 }
