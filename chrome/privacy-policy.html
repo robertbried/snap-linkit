@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Snap Linkit - Privacy Policy</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      background: #f8f9fa;
+      padding: 20px;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      background: white;
+      padding: 40px;
+      border-radius: 12px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #9333ea;
+      margin-bottom: 10px;
+      font-size: 2rem;
+    }
+    .subtitle {
+      color: #666;
+      margin-bottom: 30px;
+      font-size: 0.95rem;
+    }
+    .summary-box {
+      background: linear-gradient(135deg, #9333ea 0%, #7c3aed 100%);
+      color: white;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 30px;
+    }
+    .summary-box h2 {
+      margin-bottom: 10px;
+      font-size: 1.2rem;
+    }
+    .summary-box p {
+      font-size: 1.1rem;
+      font-weight: 500;
+    }
+    h2 {
+      color: #1a1a2e;
+      margin-top: 30px;
+      margin-bottom: 15px;
+      font-size: 1.3rem;
+      border-bottom: 2px solid #9333ea;
+      padding-bottom: 5px;
+    }
+    h3 {
+      color: #333;
+      margin-top: 20px;
+      margin-bottom: 10px;
+      font-size: 1.1rem;
+    }
+    p {
+      margin-bottom: 15px;
+    }
+    ul {
+      margin-left: 25px;
+      margin-bottom: 15px;
+    }
+    li {
+      margin-bottom: 8px;
+    }
+    .highlight {
+      background: #fef3c7;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+    .permission-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+    }
+    .permission-table th,
+    .permission-table td {
+      border: 1px solid #e5e7eb;
+      padding: 12px;
+      text-align: left;
+    }
+    .permission-table th {
+      background: #f3f4f6;
+      font-weight: 600;
+    }
+    .permission-table tr:nth-child(even) {
+      background: #f9fafb;
+    }
+    .footer {
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 1px solid #e5e7eb;
+      color: #666;
+      font-size: 0.9rem;
+      text-align: center;
+    }
+    a {
+      color: #9333ea;
+    }
+    .badge {
+      display: inline-block;
+      background: #dcfce7;
+      color: #166534;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-right: 8px;
+      margin-bottom: 8px;
+    }
+    code {
+      background: #f3f4f6;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+      font-size: 0.9em;
+    }
+    .verify-box {
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      border-radius: 8px;
+      padding: 15px;
+      margin: 20px 0;
+    }
+    .verify-box strong {
+      color: #166534;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Snap Linkit Privacy Policy</h1>
+    <p class="subtitle">Last Updated: November 18, 2026 | Version 1.4.0</p>
+
+    <div class="summary-box">
+      <h2>The Short Version</h2>
+      <p>Snap Linkit does not collect, send, or share any information about you. It only keeps your settings, inside your own browser.</p>
+    </div>
+
+    <p>
+      <span class="badge">Zero Data Collection</span>
+      <span class="badge">Nothing Sent to Us</span>
+      <span class="badge">No Tracking</span>
+      <span class="badge">Open Source</span>
+    </p>
+
+    <h2>How We Verified This</h2>
+    <p>
+      We don't just claim privacy—we prove it. Every line of code has been analyzed via static code analysis:
+    </p>
+    <ul>
+      <li><strong>No <code>fetch()</code></strong> - The function that makes HTTP requests doesn't exist in our code</li>
+      <li><strong>No <code>XMLHttpRequest</code></strong> - The older method for network calls isn't used</li>
+      <li><strong>No <code>WebSocket</code></strong> - No real-time connections to any server</li>
+      <li><strong>No external URLs</strong> - No hardcoded endpoints, APIs, or tracking pixels</li>
+      <li><strong>No analytics libraries</strong> - No Google Analytics, Mixpanel, Segment, or any tracking SDK</li>
+    </ul>
+    <p>
+      You can verify this yourself: Open your browser's Developer Tools (F12), go to the Network tab,
+      and use the extension. Snap Linkit sends <strong>nothing</strong> on its own; the only requests
+      you will see are the pages and files you choose to open or download.
+    </p>
+
+    <h2>Data Collection</h2>
+    <p>We collect <span class="highlight">NOTHING</span>. Specifically:</p>
+    <ul>
+      <li>No personal information</li>
+      <li>No browsing history</li>
+      <li>No usage analytics</li>
+      <li>No cookies or tracking</li>
+      <li>No crash reports</li>
+      <li>No telemetry of any kind</li>
+    </ul>
+
+    <h2>Network Requests</h2>
+    <p>
+      Snap Linkit <span class="highlight">never</span> sends anything to us or to anyone else. It has
+      no server and contacts none. The only network traffic it causes is what you ask for: when you
+      choose to open or download the links you selected, Chrome loads them just as if you had clicked
+      them yourself. You can verify this using your browser's developer tools (Network tab).
+    </p>
+
+    <h2>What Snap Linkit Stores</h2>
+    <p>
+      Snap Linkit keeps only your settings and one notice flag, using Chrome's built-in storage
+      for extensions. Here is the complete list:
+    </p>
+    <ul>
+      <li><code>scrollEdgeThreshold</code> - How close to screen edge triggers auto-scroll (default: 50px)</li>
+      <li><code>autoScrollSpeed</code> - Speed of auto-scroll (default: 15)</li>
+      <li><code>maxTabsWithoutConfirm</code> - Tab count before confirmation dialog (default: 20)</li>
+      <li><code>tabOpenDelay</code> - Milliseconds between opening tabs (default: 50ms)</li>
+      <li><code>blacklist</code> - The sites you add under Site Filtering (default: empty)</li>
+      <li><code>blacklistMode</code> - Blacklist or whitelist mode (default: blacklist)</li>
+      <li><code>extensionEnabled</code> - Whether extension is on (default: true)</li>
+      <li><code>releaseAction</code> - What happens when you let go after a drag over links (default: open in new tabs)</li>
+      <li><code>whatsNew</code> - One-time "what's new" notice after an update; kept only on this device and removed when you click "Got it"</li>
+    </ul>
+    <p>That's it: <strong>8 settings and 1 notice flag.</strong> This data:</p>
+    <ul>
+      <li>Is never sent to us, and we cannot see it</li>
+      <li>Is deleted from your browser when you remove Snap Linkit</li>
+      <li>Contains nothing about you or your browsing, apart from any site names you type into Site Filtering yourself</li>
+    </ul>
+    <p>
+      <strong>If you use Chrome sync:</strong> your 8 settings are saved in Chrome's sync storage. If you
+      are signed in to Chrome with your Google Account and "Extensions" is turned on in Chrome's sync
+      settings, Chrome saves them in your Google Account and copies them to your other computers through
+      Google's servers. Chrome encrypts them on their way to Google; if you also set your own sync
+      passphrase, only someone with that passphrase can read them, not Google
+      (<a href="https://policies.google.com/privacy">Google Privacy Policy</a>).
+      Without sync, they stay on this device. The notice flag (<code>whatsNew</code>) always stays on this
+      device only.
+    </p>
+
+    <h2>Permissions Explained</h2>
+    <p>These are all the permissions Snap Linkit asks for, and why:</p>
+
+    <table class="permission-table">
+      <thead>
+        <tr>
+          <th>Permission</th>
+          <th>Why We Need It</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>clipboardWrite</code></td>
+          <td>Lets "Copy Links", "Copy Link Text", the "Copy links" choice of "When I let go", and Ctrl+C put the links you selected on your clipboard.</td>
+        </tr>
+        <tr>
+          <td><code>storage</code></td>
+          <td>Lets Snap Linkit remember your settings and the one-time notice.</td>
+        </tr>
+        <tr>
+          <td><code>downloads</code></td>
+          <td>Lets "Download Files" save the files you selected.</td>
+        </tr>
+        <tr>
+          <td><code>http://*/*</code>, <code>https://*/*</code> (access to websites; Chrome shows it as "Read and change all your data on all websites")</td>
+          <td>Lets Snap Linkit draw the selection box and find the links on the web pages you use it on; nothing from those pages is sent anywhere.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>Third Parties</h2>
+    <p>
+      We do not share any data with third parties because we don't have any data to share.
+      There are no analytics services, no advertising networks, no data brokers.
+      If you use Chrome sync, your settings are saved on Google's servers, as explained above;
+      that is a Chrome feature you control, not something Snap Linkit sends.
+    </p>
+
+    <h2>Children's Privacy</h2>
+    <p>
+      We do not knowingly collect any information from anyone, including children under 13.
+      Since we collect no data at all, there is no children's data to protect.
+    </p>
+
+    <h2>Open Source</h2>
+    <p>
+      This extension's source code is available for inspection. We have nothing to hide
+      because we have nothing to collect. You are welcome to review the code to verify
+      our privacy claims.
+    </p>
+
+    <h2>Changes to This Policy</h2>
+    <p>
+      If we ever change this policy, we will update the "Last Updated" date at the top of
+      this page. Given that we collect nothing, significant changes are unlikely.
+    </p>
+
+    <h2>Contact</h2>
+    <p>
+      For questions about this privacy policy or the extension, please open an issue at
+      <a href="https://github.com/robertbried/snap-linkit/issues">github.com/robertbried/snap-linkit/issues</a>.
+    </p>
+
+    <div class="verify-box">
+      <strong>Verify it yourself:</strong> Open DevTools (F12) → Network tab → Use the extension →
+      Snap Linkit sends nothing on its own; you only see the pages and files you choose to open or download.
+      Our source code is open for inspection—no obfuscation, no minification,
+      nothing to hide.
+    </div>
+
+    <div class="footer">
+      <p><strong>Snap Linkit</strong> - Your browsing is your business.</p>
+      <p>Privacy claims checked against the source code, which anyone can read.</p>
+      <p style="margin-top: 10px; font-size: 0.85rem;">Made with respect for your privacy.</p>
+    </div>
+  </div>
+</body>
+</html>

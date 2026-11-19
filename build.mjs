@@ -7,7 +7,8 @@
  *   node build.mjs chrome     -> dist/chrome (src/ with the files in chrome/ added or replacing)
  *
  * chrome/ holds only what Chrome needs to be different: manifest.json (service worker, no
- * browser_specific_settings, minimum_chrome_version, Chrome 128 px icon), sw.js and images/icon128-chrome.png.
+ * browser_specific_settings, minimum_chrome_version, Chrome 128 px icon), sw.js, images/icon128-chrome.png and
+ * privacy-policy.html (the Chrome wording of the policy; src/privacy-policy.html is the Firefox one).
  * Zips are deterministic (sorted entries, fixed timestamps), so the same files always give the same bytes.
  * No dependencies: node:fs, node:path, node:zlib, node:crypto only.
  */
