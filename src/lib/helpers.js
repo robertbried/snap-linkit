@@ -225,6 +225,129 @@
     return `${count} ${noun}${count !== 1 ? 's' : ''}`;
   }
 
+  // ---- Careful saving for Fandom's progress-tracking checkboxes (brief 2) ----
+  // Fandom saves each tracking checkbox on its own `change` event, with no
+  // queue and no limit. Snap Linkit therefore clicks these boxes one at a
+  // time and reads the result back from the box (BRIEF-2-DESIGN-v2.md).
+
+  // Fandom's own selector (CHECKBOX_SELECTOR in ext.fandom.TableProgressTracking.js,
+  // July 2026) and the table its script looks inside. Recognised on any host.
+  const TRACKED_CHECKBOX_SELECTOR = 'input[type="checkbox"][data-tpt-row-id][data-table-id]';
+  const TRACKED_TABLE_SELECTOR = 'table[data-tpt-id]';
+
+  // Is this a Fandom tracking checkbox? Plain facts about the element, so the
+  // rule is testable without a DOM:
+  //   { tagName, type, hasRowId, hasTableId, inTrackedTable }
+  // hasRowId / hasTableId: the data-tpt-row-id / data-table-id attributes are
+  // present (any value, as in the selector); inTrackedTable: it sits inside
+  // table[data-tpt-id]. Telepedia's markup (data-row-id) is not covered.
+  function isTrackedCheckbox(info) {
+    return Boolean(info) &&
+      String(info.tagName || '').toLowerCase() === 'input' &&
+      String(info.type || '').toLowerCase() === 'checkbox' &&
+      info.hasRowId === true && info.hasTableId === true && info.inTrackedTable === true;
+  }
+
+  // What a tracking checkbox shows straight after el.click(), in the same task
+  // (Fandom sets `disabled` and `is-saving` before its first await):
+  //   'saving'       checked = target, is-saving       a save is in flight
+  //   'refused'      checked != target, no is-saving   the page cancelled the click (signed out)
+  //   'unconfirmed'  checked = target, no is-saving    changed, but no save started
+  //   'unexpected'   checked != target, is-saving      treated as a failed save
+  function afterClickOutcome({ checked, target, saving }) {
+    const changed = checked === target;
+    if (saving) return changed ? 'saving' : 'unexpected';
+    return changed ? 'unconfirmed' : 'refused';
+  }
+
+  // Notes after a checkbox message, only when not zero, in this order:
+  // not accepted, failed, already, disabled skipped.
+  function checkboxNotes(c) {
+    const v = c.target ? 'checked' : 'unchecked';
+    const notes = [];
+    if (c.refused > 0) notes.push(`${c.refused} not accepted by the page`);
+    if (c.failed > 0) notes.push(`${c.failed} failed`);
+    if (c.already > 0) notes.push(`${c.already} already ${v}`);
+    if (c.disabled > 0) notes.push(`${c.disabled} disabled skipped`);
+    return notes.length > 0 ? ` (${notes.join(', ')})` : '';
+  }
+
+  // Ordinary (non-Fandom) checkboxes: honest counts, no waiting, no stopping.
+  //   c = { target, m, k, n, refused, failed, already, disabled }
+  //   m selected; k needed changing (m - already - disabled); n changed
+  function ordinaryCheckboxMessage(c) {
+    const verb = c.target ? 'Checked' : 'Unchecked';
+    const notes = checkboxNotes(c);
+    if (c.k === 0) return `${verb} 0 of ${plural(c.m, 'item')}${notes}`;
+    if (c.n === c.k) return `${verb} ${plural(c.n, 'item')}${notes}`;
+    return `${verb} ${c.n} of ${plural(c.k, 'item')}${notes}`;
+  }
+
+  // Tracked checkboxes (careful mode). Wording: BRIEF-2-DESIGN-v2.md section 4.
+  //   c = { kind, target, m, k, n, i, rest, already, disabled, timeoutSec }
+  //   kind: 'done' | 'esc' | 'failed' | 'timeout' | 'refusedFirst' |
+  //         'refusedLater' | 'unconfirmed' | 'tableChanged' | 'error'
+  // The already/disabled notes follow the "saved" count they qualify.
+  function carefulCheckboxMessage(c) {
+    const verb = c.target ? 'Checked' : 'Unchecked';
+    const v = verb.toLowerCase();
+    const notes = checkboxNotes({ target: c.target, already: c.already, disabled: c.disabled });
+    const saved = `${c.n} ${v} and saved${notes}`;
+    switch (c.kind) {
+      case 'done':
+        if (c.k === 0 && c.n === 0) return `${verb} 0 of ${plural(c.m, 'item')}${notes}`;
+        return `${verb} and saved ${plural(c.n, 'item')}${notes}.`;
+      case 'esc':
+        return `Stopped: ${v} and saved ${c.n} of ${plural(c.k, 'item')}${notes}. ${c.rest} not tried.`;
+      case 'failed':
+        return `Stopped: the page couldn't save item ${c.i} of ${c.k}. ${saved}; ${c.rest} not tried. Try again later.`;
+      case 'timeout':
+        return `Stopped: item ${c.i} of ${c.k} was still saving after ${c.timeoutSec} seconds. ` +
+          `It may still save; reload to check. ${saved}; ${c.rest} not tried.`;
+      case 'refusedFirst':
+        return `This page didn't accept the change (0 of ${c.k} changed); you may need to sign in.` +
+          (notes ? ` ${notes.trim()}` : '');
+      case 'refusedLater':
+        return `Stopped: the page didn't accept item ${c.i} of ${c.k}; you may need to sign in. ${saved}.`;
+      case 'unconfirmed':
+        return `Stopped: item ${c.i} changed, but Snap Linkit couldn't confirm it was saved. Reload to check. ${saved}.`;
+      case 'tableChanged':
+        return `Stopped: the table changed while saving. ${saved}; ${c.rest} not tried.`;
+      case 'error':
+        // Not in the design's table: an exception inside Snap Linkit itself
+        return `Stopped: Snap Linkit hit an error at item ${c.i} of ${c.k}. ${saved}; ${c.rest} not tried.`;
+      default:
+        throw new Error(`carefulCheckboxMessage: unknown kind "${c.kind}"`);
+    }
+  }
+
+  // Progress line while a careful run is going (stays on screen).
+  function carefulProgressMessage(i, k, ignoredDrag) {
+    return `Saving ${i} of ${k}… Press Esc to stop.` +
+      (ignoredDrag ? ' A new drag was ignored while saving.' : '');
+  }
+
+  // "about 20 seconds", "about 1 minute", "about 3 minutes"
+  function formatDurationEstimate(ms) {
+    const secs = Math.max(0, Number(ms) || 0) / 1000;
+    const fives = Math.max(5, Math.round(secs / 5) * 5);
+    if (fives < 60) return `about ${fives} seconds`;
+    return `about ${plural(Math.max(1, Math.round(secs / 60)), 'minute')}`;
+  }
+
+  // Confirm shown before a careful run above the threshold. The design writes
+  // "{verb} {k} items?" / "{verb} All" with {verb} = Checked/Unchecked; read as
+  // the imperative here ("Check 40 items?", "Check All"), like "Open 25 tabs?".
+  //   perItemMs: gap + assumed save time per box
+  function carefulConfirmText(target, k, perItemMs) {
+    const verb = target ? 'Check' : 'Uncheck';
+    return {
+      title: `${verb} ${plural(k, 'item')}?`,
+      message: `Snap Linkit will save them one at a time. This takes ${formatDurationEstimate(k * perItemMs)}.`,
+      confirmLabel: `${verb} All`,
+    };
+  }
+
   // Characters the downloads API rejects in a filename: backslash, slash,
   // colon, star, question mark, quote, angle brackets, pipe, and the ASCII
   // control range (built from char codes so this file stays free of them).
@@ -344,6 +467,15 @@
     normalizeReleaseAction,
     dragModifierMode,
     plural,
+    TRACKED_CHECKBOX_SELECTOR,
+    TRACKED_TABLE_SELECTOR,
+    isTrackedCheckbox,
+    afterClickOutcome,
+    ordinaryCheckboxMessage,
+    carefulCheckboxMessage,
+    carefulProgressMessage,
+    formatDurationEstimate,
+    carefulConfirmText,
     filenameFromUrl,
     WHATS_NEW_VERSION,
     WHATS_NEW_SHORTCUTS,

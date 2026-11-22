@@ -10,7 +10,9 @@
   const {
     isOpenableUrl, matchesPattern, rectsIntersect, selectionRect,
     isDownloadableUrl, majorityShouldCheck, plural, fitMenuAxis, clampMenuAxis,
-    normalizeReleaseAction, dragModifierMode, isStyleHidden, proxyLabelIndexes
+    normalizeReleaseAction, dragModifierMode, isStyleHidden, proxyLabelIndexes,
+    TRACKED_TABLE_SELECTOR, isTrackedCheckbox, afterClickOutcome, ordinaryCheckboxMessage,
+    carefulCheckboxMessage, carefulProgressMessage, carefulConfirmText
   } = globalThis.SnapLinkitLib;
 
   // ============================================
@@ -24,6 +26,18 @@
   const FRAME_INTERVAL = 16;
   const MIN_DRAG_DISTANCE = 5; // Pixels to drag before activating selection (allows normal clicks)
   const MENU_MARGIN = 10;      // Gap the action menu keeps from the window edges when it fits
+
+  // Careful saving of Fandom's tracking checkboxes (brief 2).
+  // PROVISIONAL: every value below is a placeholder until Rob's measurement
+  // (design decision 15). Not to ship as defaults without it.
+  const CHECKBOX_SAVE_GAP_MS = 150;       // PROVISIONAL: wait after each confirmed save (a popup slider replaces this later)
+  const CHECKBOX_SAVE_TIMEOUT_MS = 10000; // PROVISIONAL: T_box, the longest wait for one save
+  const CHECKBOX_CONFIRM_ABOVE = 30;      // PROVISIONAL: ask first when more boxes than this need saving
+  const CHECKBOX_SAVE_ESTIMATE_MS = 300;  // PROVISIONAL: assumed time of one save, used only for the confirm's estimate
+  const SAVING_CLASS = 'is-saving';       // Fandom's class while a box is saving
+  // One console line per save, for Rob's measurement. Test build only:
+  // `node build.mjs --test` switches it on in the packaged copy; src/ keeps it off.
+  const SAVE_LOG = false;
 
   // ============================================
   // STATE
@@ -122,6 +136,7 @@
       attachEventListeners();
     } else if (!shouldRun && extensionActive) {
       extensionActive = false;
+      if (carefulRun) carefulRun.stop = true; // Escape no longer reaches us; stop before the next click
       detachEventListeners();
       cancelSelection();
     }
@@ -611,10 +626,12 @@
     }
   }
 
-  function showConfirmDialog(count, onConfirm) {
+  // text: { title, message, confirmLabel }. onCancel runs for every way of
+  // cancelling (Cancel, a click on the backdrop, Escape).
+  function showConfirmDialog(text, onConfirm, onCancel) {
     // One confirm at a time: a second request while it shows (e.g. the
     // shortcut pressed again) is ignored, so Open All cannot run twice.
-    if (confirmShowing()) return;
+    if (confirmShowing()) return false;
     // The menu acts on the same selection; close it so it cannot be clicked
     // while the confirm is up (it would otherwise sit above the backdrop).
     hideMenu();
@@ -626,9 +643,9 @@
     dialog.className = 'snaplinkit-confirm';
 
     const title = document.createElement('h3');
-    title.textContent = `Open ${count} tabs?`;
+    title.textContent = text.title;
     const message = document.createElement('p');
-    message.textContent = `You're about to open ${count} tabs at once. This might slow down your browser. Are you sure?`;
+    message.textContent = text.message;
     const buttons = document.createElement('div');
     buttons.className = 'snaplinkit-confirm-buttons';
     const cancelBtn = document.createElement('button');
@@ -636,7 +653,7 @@
     cancelBtn.textContent = 'Cancel';
     const confirmBtn = document.createElement('button');
     confirmBtn.className = 'snaplinkit-confirm-btn primary';
-    confirmBtn.textContent = 'Open All';
+    confirmBtn.textContent = text.confirmLabel;
     buttons.append(cancelBtn, confirmBtn);
     dialog.append(title, message, buttons);
 
@@ -652,18 +669,31 @@
         previousFocus.focus({ preventScroll: true });
       }
     };
-    confirmDialog = { el: dialog, cancel: cleanup }; // Escape (onKeyDown) cancels through this
+    const cancel = () => {
+      cleanup();
+      if (onCancel) onCancel();
+    };
+    confirmDialog = { el: dialog, cancel }; // Escape (onKeyDown) cancels through this
 
-    cancelBtn.addEventListener('click', cleanup);
+    cancelBtn.addEventListener('click', cancel);
     confirmBtn.addEventListener('click', () => {
       cleanup();
       onConfirm();
     });
-    overlay.addEventListener('click', cleanup);
+    overlay.addEventListener('click', cancel);
 
     // Focus the safe choice: Enter or Space right after the dialog appears
     // cancels instead of opening every tab.
     cancelBtn.focus({ preventScroll: true });
+    return true;
+  }
+
+  function tabsConfirmText(count) {
+    return {
+      title: `Open ${count} tabs?`,
+      message: `You're about to open ${count} tabs at once. This might slow down your browser. Are you sure?`,
+      confirmLabel: 'Open All'
+    };
   }
 
   // False once the page itself has removed the dialog (e.g. replaced <body>),
@@ -673,16 +703,41 @@
     return confirmDialog !== null;
   }
 
-  function showToast(message) {
+  // One toast at a time. A plain toast goes after 2.5 s. A sticky one (careful
+  // run progress, every "Stopped" message) stays until it is clicked, Escape
+  // is pressed, or another toast replaces it; a sticky toast that is already
+  // showing is updated in place, so progress does not flicker.
+  const STICKY_ATTR = 'data-snaplinkit-sticky';
+  function showToast(message, { sticky = false } = {}) {
     const existing = document.querySelector('.snaplinkit-toast');
+    if (sticky && existing && existing.isConnected && existing.getAttribute(STICKY_ATTR) === '1') {
+      existing.textContent = message;
+      return;
+    }
     if (existing) existing.remove();
 
     const toast = document.createElement('div');
     toast.className = 'snaplinkit-toast';
     toast.textContent = message;
+    if (sticky) {
+      toast.setAttribute(STICKY_ATTR, '1');
+      toast.title = 'Click or press Esc to close';
+      toast.style.cursor = 'pointer';
+      toast.addEventListener('click', () => toast.remove());
+    }
     document.body.appendChild(toast);
 
-    setTimeout(() => toast.remove(), 2500);
+    if (!sticky) setTimeout(() => toast.remove(), 2500);
+  }
+
+  // Close a sticky toast (Escape); true if there was one
+  function dismissStickyToast() {
+    const existing = document.querySelector('.snaplinkit-toast');
+    if (existing && existing.getAttribute(STICKY_ATTR) === '1') {
+      existing.remove();
+      return true;
+    }
+    return false;
   }
 
   // ============================================
@@ -691,7 +746,7 @@
 
   function openTabs(urls, discardAfterOpen = false) {
     if (urls.length > settings.maxTabsWithoutConfirm) {
-      showConfirmDialog(urls.length, () => doOpenTabs(urls, discardAfterOpen));
+      showConfirmDialog(tabsConfirmText(urls.length), () => doOpenTabs(urls, discardAfterOpen));
     } else {
       doOpenTabs(urls, discardAfterOpen);
     }
@@ -815,30 +870,241 @@
     return result;
   }
 
-  function toggleNotes(result) {
-    const notes = [];
-    if (result.skipped > 0) notes.push(`${result.skipped} disabled skipped`);
-    if (result.failed > 0) notes.push(`${result.failed} failed`);
-    return notes.length > 0 ? ` (${notes.join(', ')})` : '';
+  // Fandom progress-tracking checkbox (lib/helpers.js isTrackedCheckbox)
+  function isTrackedBox(el) {
+    return el instanceof HTMLInputElement && isTrackedCheckbox({
+      tagName: el.localName,
+      type: el.type,
+      hasRowId: el.hasAttribute('data-tpt-row-id'),
+      hasTableId: el.hasAttribute('data-table-id'),
+      inTrackedTable: Boolean(el.closest(TRACKED_TABLE_SELECTOR))
+    });
   }
 
-  // Smart toggle - inverts based on majority state
+  // Document order (a Ctrl+drag selection lists earlier drags first)
+  function inPageOrder(elements) {
+    return elements.slice().sort((a, b) => {
+      if (a === b || typeof a.compareDocumentPosition !== 'function') return 0;
+      return a.compareDocumentPosition(b) & 4 ? -1 : 1; // 4 = DOCUMENT_POSITION_FOLLOWING
+    });
+  }
+
+  // One animation frame (and the task after it), or 100 ms when frames do not
+  // run (background tab)
+  function afterNextFrame() {
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = () => { if (!done) { done = true; resolve(); } };
+      if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(() => setTimeout(finish, 0));
+      }
+      setTimeout(finish, 100);
+    });
+  }
+
+  function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  // Ordinary checkboxes: clicked straight away as before, then read once after
+  // the whole loop plus one animation frame (widgets that update just after
+  // the click event are still counted), so the message counts real changes.
+  async function toggleOrdinaryCheckboxes(elements, target) {
+    const c = { target, m: elements.length, k: 0, n: 0, refused: 0, failed: 0, already: 0, disabled: 0 };
+    const clicked = [];
+    for (const el of elements) {
+      if (isDisabled(el)) { c.disabled++; continue; }
+      if (isChecked(el) === target) { c.already++; continue; }
+      c.k++;
+      try {
+        el.click();
+        clicked.push(el);
+      } catch (error) {
+        c.failed++;
+        console.warn('[Snap Linkit] Could not toggle element:', el, error);
+      }
+    }
+    if (clicked.length > 0) await afterNextFrame();
+    for (const el of clicked) {
+      if (isChecked(el) === target) c.n++;
+      else c.refused++;
+    }
+    return c;
+  }
+
+  // ---- Careful mode: Fandom tracking checkboxes, one save at a time ----
+  // BRIEF-2-DESIGN-v2.md sections 1-4. Click one box, read it in the same
+  // task, wait for Fandom's is-saving to clear (MutationObserver plus a
+  // time-out), check the result, wait the gap, next. Stop at the first failed
+  // save, time-out, refused click, unconfirmed save or table change. Never
+  // retry. Only one save is ever in flight.
+
+  let carefulRun = null; // { stop, ignoredDrag, i, k } while a run is going
+
+  function showCarefulProgress(run) {
+    showToast(carefulProgressMessage(run.i, run.k, run.ignoredDrag), { sticky: true });
+  }
+
+  // Resolves 'done' once is-saving is gone, or 'timeout'. A result arriving
+  // after the time-out is ignored: the observer is disconnected by then.
+  function waitForSave(el, timeoutMs) {
+    return new Promise((resolve) => {
+      if (!el.classList.contains(SAVING_CLASS)) {
+        resolve('done');
+        return;
+      }
+      let timer = null;
+      const observer = new MutationObserver(() => {
+        if (!el.classList.contains(SAVING_CLASS)) finish('done');
+      });
+      const finish = (result) => {
+        observer.disconnect();
+        clearTimeout(timer);
+        resolve(result);
+      };
+      observer.observe(el, { attributes: true, attributeFilter: ['class', 'disabled'] });
+      timer = setTimeout(() => finish('timeout'), timeoutMs);
+    });
+  }
+
+  function logSave(i, k, status, t0) {
+    if (!SAVE_LOG) return;
+    console.log(`[Snap Linkit] save ${i}/${k} ${status} ${Math.round(performance.now() - t0)} ms`);
+  }
+
+  // queue: the tracked boxes that need changing, in page order.
+  // pre: { m, already, disabled } counted at release. Resolves to the counts
+  // and the final message; never rejects.
+  async function runCarefulSaves(queue, target, pre) {
+    const k = queue.length;
+    const run = { stop: false, ignoredDrag: false, i: 0, k };
+    carefulRun = run;
+    const c = { target, m: pre.m, k, n: 0, i: 0, rest: 0, already: pre.already, disabled: pre.disabled,
+      timeoutSec: CHECKBOX_SAVE_TIMEOUT_MS / 1000, kind: 'done' };
+    let processed = 0; // queue positions dealt with (saved, skipped, or where the run stopped)
+    let clicks = 0;
+    const stopAt = (kind, i) => { c.kind = kind; c.i = i; processed = i; };
+    try {
+      for (let idx = 0; idx < k; idx++) {
+        const el = queue[idx];
+        const i = idx + 1;
+        if (run.stop) { c.kind = 'esc'; break; }
+        // Check the box again just before clicking: earlier saves took time
+        if (!el.isConnected) { stopAt('tableChanged', i); break; }
+        if (isDisabled(el)) { c.disabled++; processed = i; continue; }
+        if (isChecked(el) === target) { c.already++; processed = i; continue; }
+
+        run.i = i;
+        showCarefulProgress(run);
+        const t0 = performance.now();
+        try {
+          el.click();
+        } catch (error) {
+          console.warn('[Snap Linkit] Could not toggle element:', el, error);
+          logSave(i, k, 'failed (click threw)', t0);
+          stopAt('failed', i);
+          break;
+        }
+        clicks++;
+        const outcome = afterClickOutcome({
+          checked: isChecked(el), target, saving: el.classList.contains(SAVING_CLASS)
+        });
+        if (outcome !== 'saving') {
+          logSave(i, k, outcome, t0);
+          stopAt(outcome === 'refused' ? (clicks === 1 ? 'refusedFirst' : 'refusedLater')
+            : outcome === 'unconfirmed' ? 'unconfirmed' : 'failed', i);
+          break;
+        }
+        const wait = await waitForSave(el, CHECKBOX_SAVE_TIMEOUT_MS);
+        if (wait === 'timeout') {
+          logSave(i, k, 'timeout', t0);
+          stopAt(el.isConnected ? 'timeout' : 'tableChanged', i);
+          break;
+        }
+        if (isChecked(el) !== target) {
+          logSave(i, k, 'failed', t0);
+          stopAt('failed', i);
+          break;
+        }
+        if (isDisabled(el)) {
+          logSave(i, k, 'unconfirmed (still disabled)', t0);
+          stopAt('unconfirmed', i);
+          break;
+        }
+        c.n++;
+        processed = i;
+        logSave(i, k, 'ok', t0);
+        if (i < k) await sleep(CHECKBOX_SAVE_GAP_MS);
+      }
+    } catch (error) {
+      // A fault in Snap Linkit itself: say so rather than report a result
+      console.error('[Snap Linkit] Careful save run failed:', error);
+      stopAt('error', Math.max(run.i, 1));
+    } finally {
+      if (carefulRun === run) carefulRun = null;
+    }
+    c.rest = k - processed;
+    return c;
+  }
+
+  // Smart toggle - inverts based on majority state. Fandom's tracking boxes
+  // are saved carefully, one at a time; every other checkbox as before.
   function smartToggleCheckboxes(checkboxes) {
     if (checkboxes.length === 0) return;
 
     // Determine majority: if most are checked, uncheck all; otherwise check all
     const checkedCount = checkboxes.filter(isChecked).length;
-    const shouldCheck = majorityShouldCheck(checkedCount, checkboxes.length);
+    const target = majorityShouldCheck(checkedCount, checkboxes.length);
 
-    const result = clickToState(checkboxes, shouldCheck);
-    const verb = shouldCheck ? 'Checked' : 'Unchecked';
-    const total = checkboxes.length;
-    const affected = total - result.skipped - result.failed;
-    const head = result.skipped + result.failed > 0
-      ? `${verb} ${affected} of ${total} items`
-      : `${verb} ${total} items`;
-    showToast(head + toggleNotes(result));
-    clearSelection();
+    const tracked = inPageOrder(checkboxes.filter(isTrackedBox));
+    const ordinary = checkboxes.filter((el) => !tracked.includes(el));
+
+    // Ordinary boxes: straight away, as before
+    const ordinaryDone = ordinary.length > 0 ? toggleOrdinaryCheckboxes(ordinary, target) : null;
+    if (tracked.length === 0) {
+      clearSelection();
+      ordinaryDone.then((c) => showToast(ordinaryCheckboxMessage(c)));
+      return;
+    }
+
+    const pre = { m: tracked.length, already: 0, disabled: 0 };
+    const queue = [];
+    for (const el of tracked) {
+      if (isDisabled(el)) pre.disabled++;
+      else if (isChecked(el) === target) pre.already++;
+      else queue.push(el);
+    }
+
+    // A mixed selection: the ordinary result leads the final message
+    const finish = async (carefulText, sticky) => {
+      const lead = ordinaryDone ? `${ordinaryCheckboxMessage(await ordinaryDone)}. ` : '';
+      showToast(lead + carefulText, { sticky });
+    };
+
+    const start = () => (async () => {
+      clearSelection();
+      const c = await runCarefulSaves(queue, target, pre);
+      // Every message but plain success stays until dismissed
+      await finish(carefulCheckboxMessage(c), c.kind !== 'done');
+    })().catch((error) => {
+      // runCarefulSaves never rejects; this is the message step failing
+      console.error('[Snap Linkit] Could not report the checkbox result:', error);
+    });
+
+    if (queue.length > CHECKBOX_CONFIRM_ABOVE) {
+      const shown = showConfirmDialog(
+        carefulConfirmText(target, queue.length, CHECKBOX_SAVE_GAP_MS + CHECKBOX_SAVE_ESTIMATE_MS),
+        start,
+        () => {
+          // Cancel clicks nothing (ordinary boxes were already done)
+          clearSelection();
+          if (ordinaryDone) ordinaryDone.then((c) => showToast(ordinaryCheckboxMessage(c)));
+        }
+      );
+      if (!shown) clearSelection();
+      return;
+    }
+    start();
   }
 
   // Radios: select the first one in the selection
@@ -1101,6 +1367,14 @@
 
     // Priority: If ONLY checkboxes/radios (no links), instant toggle
     if (links.length === 0 && (checkboxes.length > 0 || radios.length > 0)) {
+      // A checkbox drag while a careful save run is going is ignored (not
+      // queued); the progress message says so
+      if (carefulRun && checkboxes.length > 0) {
+        carefulRun.ignoredDrag = true;
+        showCarefulProgress(carefulRun);
+        clearSelection();
+        return;
+      }
       // Instant action - no menu
       if (checkboxes.length > 0) {
         smartToggleCheckboxes(checkboxes);
@@ -1165,6 +1439,15 @@
         confirmDialog.cancel();
         return;
       }
+      // During a careful save run, Escape stops it before the next click (a
+      // save already in flight is waited for and reported)
+      if (carefulRun) {
+        carefulRun.stop = true;
+        cancelSelection();
+        return;
+      }
+      // Otherwise it closes a "Stopped" message that is still showing
+      dismissStickyToast();
       cancelSelection();
     }
   }

@@ -7,10 +7,12 @@ const lib = require('../src/lib/helpers.js');
 test('SnapLinkitLib exposes every helper and is frozen', () => {
   assert.deepEqual(Object.keys(lib).sort(), [
     'DOWNLOAD_EXTENSIONS', 'OPENABLE_PROTOCOLS', 'RELEASE_ACTIONS', 'WHATS_NEW_SHORTCUTS', 'WHATS_NEW_VERSION',
-    'blacklistBytes', 'clampMenuAxis', 'dragModifierMode', 'filenameFromUrl', 'fitMenuAxis', 'formatShortcut', 'isDownloadableUrl', 'isOpenableUrl',
-    'isStyleHidden', 'isValidPattern', 'isVersionBefore', 'majorityShouldCheck', 'matchesPattern', 'normalizeReleaseAction', 'plural',
+    'TRACKED_CHECKBOX_SELECTOR', 'TRACKED_TABLE_SELECTOR', 'afterClickOutcome', 'blacklistBytes', 'carefulCheckboxMessage', 'carefulConfirmText',
+    'carefulProgressMessage', 'clampMenuAxis', 'dragModifierMode', 'filenameFromUrl', 'fitMenuAxis', 'formatDurationEstimate', 'formatShortcut',
+    'isDownloadableUrl', 'isOpenableUrl', 'isStyleHidden', 'isTrackedCheckbox', 'isValidPattern', 'isVersionBefore', 'majorityShouldCheck',
+    'matchesPattern', 'normalizeReleaseAction', 'ordinaryCheckboxMessage', 'plural',
     'proxyLabelIndexes', 'rectsIntersect', 'selectionRect', 'shouldOfferWhatsNew', 'whatsNewLines', 'whatsNewRecord', 'whatsNewShowsShortcuts',
-  ]);
+  ].sort());
   assert.ok(Object.isFrozen(lib));
   assert.equal(globalThis.SnapLinkitLib, lib);
 });
@@ -335,4 +337,126 @@ test('proxyLabelIndexes: a hidden checkbox is stood in for by its visible labels
   // hidden input without a visible label stays unselectable
   assert.deepEqual(lib.proxyLabelIndexes(box(0, 0, true), []), []);
   assert.deepEqual(lib.proxyLabelIndexes(box(0, 0, true), [box(0, 0)]), []);
+});
+
+// ---- Brief 2: careful saving of Fandom tracking checkboxes ----
+
+test('tracked-checkbox selectors are Fandom\'s own (July 2026 CHECKBOX_SELECTOR and table attribute)', () => {
+  assert.equal(lib.TRACKED_CHECKBOX_SELECTOR, 'input[type="checkbox"][data-tpt-row-id][data-table-id]');
+  assert.equal(lib.TRACKED_TABLE_SELECTOR, 'table[data-tpt-id]');
+});
+
+test('isTrackedCheckbox: Fandom markup on any host; Telepedia data-row-id, plain checkboxes and radios are not', () => {
+  const fandom = { tagName: 'input', type: 'checkbox', hasRowId: true, hasTableId: true, inTrackedTable: true };
+  assert.equal(lib.isTrackedCheckbox(fandom), true);
+  assert.equal(lib.isTrackedCheckbox({ ...fandom, tagName: 'INPUT', type: 'CHECKBOX' }), true);
+  assert.equal(lib.isTrackedCheckbox({ ...fandom, hasRowId: false }), false, 'Telepedia: data-row-id, no data-tpt-row-id');
+  assert.equal(lib.isTrackedCheckbox({ ...fandom, hasTableId: false }), false);
+  assert.equal(lib.isTrackedCheckbox({ ...fandom, inTrackedTable: false }), false, 'outside table[data-tpt-id]');
+  assert.equal(lib.isTrackedCheckbox({ ...fandom, type: 'radio' }), false);
+  assert.equal(lib.isTrackedCheckbox({ ...fandom, tagName: 'div' }), false, 'ARIA role=checkbox widget');
+  assert.equal(lib.isTrackedCheckbox({ tagName: 'input', type: 'checkbox', hasRowId: false, hasTableId: false, inTrackedTable: false }), false);
+  assert.equal(lib.isTrackedCheckbox({ ...fandom, hasRowId: 'yes' }), false, 'facts must be real booleans');
+  assert.equal(lib.isTrackedCheckbox(null), false);
+  assert.equal(lib.isTrackedCheckbox(undefined), false);
+});
+
+test('afterClickOutcome: the four rows of the design\'s step 3 table, for both targets', () => {
+  for (const target of [true, false]) {
+    assert.equal(lib.afterClickOutcome({ checked: target, target, saving: true }), 'saving');
+    assert.equal(lib.afterClickOutcome({ checked: !target, target, saving: false }), 'refused');
+    assert.equal(lib.afterClickOutcome({ checked: target, target, saving: false }), 'unconfirmed');
+    assert.equal(lib.afterClickOutcome({ checked: !target, target, saving: true }), 'unexpected');
+  }
+});
+
+const base = { m: 10, k: 10, n: 0, i: 0, rest: 0, already: 0, disabled: 0, timeoutSec: 10 };
+const cm = (o) => lib.carefulCheckboxMessage({ ...base, ...o });
+
+test('carefulCheckboxMessage: success, with notes and singular', () => {
+  assert.equal(cm({ kind: 'done', target: true, n: 10 }), 'Checked and saved 10 items.');
+  assert.equal(cm({ kind: 'done', target: true, n: 10, m: 12, already: 2 }), 'Checked and saved 10 items (2 already checked).');
+  assert.equal(cm({ kind: 'done', target: false, n: 5, m: 6, k: 5, already: 1 }), 'Unchecked and saved 5 items (1 already unchecked).');
+  assert.equal(cm({ kind: 'done', target: true, n: 1, k: 1, m: 1 }), 'Checked and saved 1 item.');
+  assert.equal(cm({ kind: 'done', target: true, n: 3, k: 3, m: 6, already: 2, disabled: 1 }),
+    'Checked and saved 3 items (2 already checked, 1 disabled skipped).');
+});
+
+test('carefulCheckboxMessage: all disabled is unchanged from today', () => {
+  assert.equal(cm({ kind: 'done', target: true, m: 10, k: 0, disabled: 10 }), 'Checked 0 of 10 items (10 disabled skipped)');
+  assert.equal(cm({ kind: 'done', target: true, m: 1, k: 0, disabled: 1 }), 'Checked 0 of 1 item (1 disabled skipped)');
+});
+
+test('carefulCheckboxMessage: Esc', () => {
+  assert.equal(cm({ kind: 'esc', target: true, n: 3, k: 10, rest: 7 }), 'Stopped: checked and saved 3 of 10 items. 7 not tried.');
+  assert.equal(cm({ kind: 'esc', target: false, n: 0, k: 1, rest: 1 }), 'Stopped: unchecked and saved 0 of 1 item. 1 not tried.');
+});
+
+test('carefulCheckboxMessage: failed save (design T3 numbers)', () => {
+  assert.equal(cm({ kind: 'failed', target: true, n: 37, k: 208, i: 38, rest: 170 }),
+    "Stopped: the page couldn't save item 38 of 208. 37 checked and saved; 170 not tried. Try again later.");
+  assert.equal(cm({ kind: 'failed', target: false, n: 0, k: 4, i: 1, rest: 3, already: 1 }),
+    "Stopped: the page couldn't save item 1 of 4. 0 unchecked and saved (1 already unchecked); 3 not tried. Try again later.");
+});
+
+test('carefulCheckboxMessage: time-out', () => {
+  assert.equal(cm({ kind: 'timeout', target: true, n: 4, k: 10, i: 5, rest: 5, timeoutSec: 10 }),
+    'Stopped: item 5 of 10 was still saving after 10 seconds. It may still save; reload to check. 4 checked and saved; 5 not tried.');
+});
+
+test('carefulCheckboxMessage: refused click, first box and later box', () => {
+  assert.equal(cm({ kind: 'refusedFirst', target: true, k: 10, i: 1, rest: 9 }),
+    "This page didn't accept the change (0 of 10 changed); you may need to sign in.");
+  assert.equal(cm({ kind: 'refusedFirst', target: true, k: 1, i: 1 }),
+    "This page didn't accept the change (0 of 1 changed); you may need to sign in.");
+  assert.equal(cm({ kind: 'refusedLater', target: true, n: 3, k: 10, i: 4, rest: 6 }),
+    "Stopped: the page didn't accept item 4 of 10; you may need to sign in. 3 checked and saved.");
+});
+
+test('carefulCheckboxMessage: changed but no save seen; table changed; internal error', () => {
+  assert.equal(cm({ kind: 'unconfirmed', target: true, n: 0, k: 10, i: 1 }),
+    "Stopped: item 1 changed, but Snap Linkit couldn't confirm it was saved. Reload to check. 0 checked and saved.");
+  assert.equal(cm({ kind: 'tableChanged', target: true, n: 5, k: 10, i: 6, rest: 4 }),
+    'Stopped: the table changed while saving. 5 checked and saved; 4 not tried.');
+  assert.equal(cm({ kind: 'error', target: false, n: 2, k: 10, i: 3, rest: 7 }),
+    'Stopped: Snap Linkit hit an error at item 3 of 10. 2 unchecked and saved; 7 not tried.');
+  assert.throws(() => cm({ kind: 'nope', target: true }), /unknown kind/);
+});
+
+test('ordinaryCheckboxMessage: honest counts (the "Unchecked 6" fix), not accepted, failed, all disabled', () => {
+  const om = (o) => lib.ordinaryCheckboxMessage({ refused: 0, failed: 0, already: 0, disabled: 0, ...o });
+  assert.equal(om({ target: false, m: 6, k: 5, n: 5, already: 1 }), 'Unchecked 5 items (1 already unchecked)');
+  assert.equal(om({ target: true, m: 5, k: 5, n: 5 }), 'Checked 5 items');
+  assert.equal(om({ target: true, m: 1, k: 1, n: 1 }), 'Checked 1 item');
+  assert.equal(om({ target: true, m: 10, k: 10, n: 0, refused: 10 }), 'Checked 0 of 10 items (10 not accepted by the page)');
+  assert.equal(om({ target: true, m: 3, k: 3, n: 2, failed: 1 }), 'Checked 2 of 3 items (1 failed)');
+  assert.equal(om({ target: true, m: 3, k: 2, n: 2, disabled: 1 }), 'Checked 2 items (1 disabled skipped)');
+  assert.equal(om({ target: true, m: 10, k: 0, n: 0, disabled: 10 }), 'Checked 0 of 10 items (10 disabled skipped)');
+  assert.equal(om({ target: true, m: 8, k: 6, n: 5, refused: 1, already: 1, disabled: 1 }),
+    'Checked 5 of 6 items (1 not accepted by the page, 1 already checked, 1 disabled skipped)');
+});
+
+test('carefulProgressMessage: progress, and the ignored-drag note', () => {
+  assert.equal(lib.carefulProgressMessage(3, 10, false), 'Saving 3 of 10… Press Esc to stop.');
+  assert.equal(lib.carefulProgressMessage(3, 10, true), 'Saving 3 of 10… Press Esc to stop. A new drag was ignored while saving.');
+});
+
+test('formatDurationEstimate: 5-second steps under a minute, then whole minutes', () => {
+  assert.equal(lib.formatDurationEstimate(0), 'about 5 seconds');
+  assert.equal(lib.formatDurationEstimate(1200), 'about 5 seconds');
+  assert.equal(lib.formatDurationEstimate(18000), 'about 20 seconds');
+  assert.equal(lib.formatDurationEstimate(56999), 'about 55 seconds');
+  assert.equal(lib.formatDurationEstimate(58000), 'about 1 minute');
+  assert.equal(lib.formatDurationEstimate(62400), 'about 1 minute', '208 x 300 ms, the design\'s example');
+  assert.equal(lib.formatDurationEstimate(93600), 'about 2 minutes');
+  assert.equal(lib.formatDurationEstimate(NaN), 'about 5 seconds');
+});
+
+test('carefulConfirmText: title, estimate text and button', () => {
+  assert.deepEqual(lib.carefulConfirmText(true, 40, 450), {
+    title: 'Check 40 items?', message: 'Snap Linkit will save them one at a time. This takes about 20 seconds.', confirmLabel: 'Check All',
+  });
+  assert.deepEqual(lib.carefulConfirmText(false, 208, 300), {
+    title: 'Uncheck 208 items?', message: 'Snap Linkit will save them one at a time. This takes about 1 minute.', confirmLabel: 'Uncheck All',
+  });
 });

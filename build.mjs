@@ -5,6 +5,10 @@
  *   node build.mjs            -> dist/firefox and dist/chrome, plus a zip of each
  *   node build.mjs firefox    -> dist/firefox (exactly src/, nothing added or changed)
  *   node build.mjs chrome     -> dist/chrome (src/ with the files in chrome/ added or replacing)
+ *   node build.mjs --test [firefox|chrome]
+ *                             -> dist/test/<target> and dist/test/snap_linkit-<target>-<version>-test.zip: the same
+ *                                files, except that content.js logs one console line per Fandom checkbox save
+ *                                (SAVE_LOG on). For test builds only; never for a store upload.
  *
  * chrome/ holds only what Chrome needs to be different: manifest.json (service worker, no
  * browser_specific_settings, minimum_chrome_version, Chrome 128 px icon), sw.js, images/icon128-chrome.png and
@@ -87,7 +91,11 @@ function writeZip(zipPath, baseDir, files) {
  * Returns { target, dir, zip, version, files, sha256 }. Throws on any problem (a failed build may leave a
  * partial <outDir>/<target>/; the next build deletes and rebuilds it).
  */
-export function buildTarget(target, outDir = path.join(ROOT, 'dist')) {
+// Test builds: the one line of content.js that turns the per-save console line on. Must occur exactly once.
+const SAVE_LOG_OFF = 'const SAVE_LOG = false;';
+const SAVE_LOG_ON = 'const SAVE_LOG = true; ';
+
+export function buildTarget(target, outDir = path.join(ROOT, 'dist'), { test = false } = {}) {
   if (!(target in OVERLAYS)) throw new Error(`build: unknown target "${target}" (firefox or chrome)`);
   const version = manifestVersion(path.join(SRC, 'manifest.json'));
   const overlay = OVERLAYS[target];
@@ -104,16 +112,25 @@ export function buildTarget(target, outDir = path.join(ROOT, 'dist')) {
     fs.mkdirSync(path.dirname(path.join(dir, f)), { recursive: true });
     fs.copyFileSync(from.get(f), path.join(dir, f));
   }
-  const zip = path.join(outDir, `snap_linkit-${target}-${version}.zip`);
+  if (test) {
+    const cs = path.join(dir, 'content.js');
+    const text = fs.readFileSync(cs, 'utf8');
+    if (text.split(SAVE_LOG_OFF).length !== 2) throw new Error(`build: test build needs exactly one "${SAVE_LOG_OFF}" in content.js`);
+    fs.writeFileSync(cs, text.replace(SAVE_LOG_OFF, SAVE_LOG_ON));
+  }
+  const zip = path.join(outDir, `snap_linkit-${target}-${version}${test ? '-test' : ''}.zip`);
   writeZip(zip, dir, files);
   const sha256 = crypto.createHash('sha256').update(fs.readFileSync(zip)).digest('hex');
   return { target, dir, zip, version, files, sha256 };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const targets = process.argv.slice(2).length ? process.argv.slice(2) : ['firefox', 'chrome'];
+  const args = process.argv.slice(2);
+  const test = args.includes('--test');
+  const named = args.filter((a) => a !== '--test');
+  const targets = named.length ? named : ['firefox', 'chrome'];
   for (const t of targets) {
-    const r = buildTarget(t);
+    const r = test ? buildTarget(t, path.join(ROOT, 'dist', 'test'), { test: true }) : buildTarget(t);
     console.log(`${r.target} ${r.version}: ${r.files.length} files -> ${path.relative(ROOT, r.zip)} (sha256 ${r.sha256})`);
   }
 }
