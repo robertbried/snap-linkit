@@ -8,8 +8,8 @@ test('SnapLinkitLib exposes every helper and is frozen', () => {
   assert.deepEqual(Object.keys(lib).sort(), [
     'DOWNLOAD_EXTENSIONS', 'OPENABLE_PROTOCOLS', 'RELEASE_ACTIONS', 'WHATS_NEW_SHORTCUTS', 'WHATS_NEW_VERSION',
     'blacklistBytes', 'clampMenuAxis', 'dragModifierMode', 'filenameFromUrl', 'fitMenuAxis', 'formatShortcut', 'isDownloadableUrl', 'isOpenableUrl',
-    'isValidPattern', 'isVersionBefore', 'majorityShouldCheck', 'matchesPattern', 'normalizeReleaseAction', 'plural',
-    'rectsIntersect', 'selectionRect', 'shouldOfferWhatsNew', 'whatsNewLines', 'whatsNewRecord', 'whatsNewShowsShortcuts',
+    'isStyleHidden', 'isValidPattern', 'isVersionBefore', 'majorityShouldCheck', 'matchesPattern', 'normalizeReleaseAction', 'plural',
+    'proxyLabelIndexes', 'rectsIntersect', 'selectionRect', 'shouldOfferWhatsNew', 'whatsNewLines', 'whatsNewRecord', 'whatsNewShowsShortcuts',
   ]);
   assert.ok(Object.isFrozen(lib));
   assert.equal(globalThis.SnapLinkitLib, lib);
@@ -309,4 +309,30 @@ test('dragModifierMode: Ctrl or Shift held as the drag starts = add, Alt = remov
   // metaKey (Windows/Command key) is not a modifier here
   assert.equal(lib.dragModifierMode({ metaKey: true }), null);
   for (const v of [undefined, null, {}]) assert.equal(lib.dragModifierMode(v), null);
+});
+
+test('isStyleHidden: display none, visibility hidden or opacity 0 draw nothing', () => {
+  const base = { display: 'block', visibility: 'visible', opacity: '1' };
+  assert.equal(lib.isStyleHidden(base), false);
+  assert.equal(lib.isStyleHidden({ ...base, display: 'none' }), true);
+  assert.equal(lib.isStyleHidden({ ...base, visibility: 'hidden' }), true);
+  assert.equal(lib.isStyleHidden({ ...base, opacity: '0' }), true);
+  assert.equal(lib.isStyleHidden({ ...base, opacity: '0.5' }), false);
+});
+
+test('proxyLabelIndexes: a hidden checkbox is stood in for by its visible labels (issue #1)', () => {
+  const box = (w, h, hidden = false) => ({ hidden, rect: { width: w, height: h } });
+  // Fandom progress table: input opacity 0 and 0x0, empty <label for> filling the cell
+  assert.deepEqual(lib.proxyLabelIndexes(box(0, 0, true), [box(24, 24)]), [0]);
+  // display:none input inside a wrapping label
+  assert.deepEqual(lib.proxyLabelIndexes(box(0, 0, true), [box(120, 20)]), [0]);
+  // visible but 0x0 input with a visible label
+  assert.deepEqual(lib.proxyLabelIndexes(box(0, 0), [box(24, 24)]), [0]);
+  // only the labels that show count; order is kept
+  assert.deepEqual(lib.proxyLabelIndexes(box(0, 0, true), [box(24, 24, true), box(0, 0), box(30, 10), box(5, 5)]), [2, 3]);
+  // a visible input is used as itself, even with a visible label (no behaviour change)
+  assert.deepEqual(lib.proxyLabelIndexes(box(13, 13), [box(80, 18)]), []);
+  // hidden input without a visible label stays unselectable
+  assert.deepEqual(lib.proxyLabelIndexes(box(0, 0, true), []), []);
+  assert.deepEqual(lib.proxyLabelIndexes(box(0, 0, true), [box(0, 0)]), []);
 });

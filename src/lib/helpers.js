@@ -100,6 +100,27 @@
     return new TextEncoder().encode(JSON.stringify(list)).length;
   }
 
+  // A computed style that draws nothing: display none, visibility hidden or
+  // opacity 0 (the visibility test getSelectableElements has always used)
+  function isStyleHidden(style) {
+    return style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0';
+  }
+
+  // Custom-styled checkboxes hide the real <input> (opacity 0,
+  // display none, visibility hidden or a 0x0 box) and draw the box on a
+  // <label> (issue #1). Given the input's state and its labels' states, return
+  // the indexes of the labels that stand in for it: the visible, non-empty
+  // ones. [] means the input is used as itself (it shows, or no label shows).
+  //   input   { hidden, rect: { width, height } }   hidden = isStyleHidden(style)
+  //   labels  [{ hidden, rect: { width, height } }]
+  function proxyLabelIndexes(input, labels) {
+    const shows = (s) => !s.hidden && s.rect.width > 0 && s.rect.height > 0;
+    if (shows(input)) return [];
+    const out = [];
+    labels.forEach((label, i) => { if (shows(label)) out.push(i); });
+    return out;
+  }
+
   // Axis-aligned rectangle intersection (no snapping tolerance)
   function rectsIntersect(r1, r2) {
     return !(
@@ -311,6 +332,8 @@
     isValidPattern,
     blacklistBytes,
     rectsIntersect,
+    isStyleHidden,
+    proxyLabelIndexes,
     selectionRect,
     DOWNLOAD_EXTENSIONS,
     isDownloadableUrl,

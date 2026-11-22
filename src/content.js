@@ -10,7 +10,7 @@
   const {
     isOpenableUrl, matchesPattern, rectsIntersect, selectionRect,
     isDownloadableUrl, majorityShouldCheck, plural, fitMenuAxis, clampMenuAxis,
-    normalizeReleaseAction, dragModifierMode
+    normalizeReleaseAction, dragModifierMode, isStyleHidden, proxyLabelIndexes
   } = globalThis.SnapLinkitLib;
 
   // ============================================
@@ -179,8 +179,9 @@
 
     return Array.from(document.querySelectorAll(selectors.join(', '))).filter(el => {
       const style = window.getComputedStyle(el);
-      if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {
-        return false;
+      if (isStyleHidden(style)) {
+        // A hidden checkbox stays selectable through a visible label
+        return proxyLabels(el).length > 0;
       }
 
       // SVG <a> elements also match a[href] but carry an SVGAnimatedString href
@@ -196,6 +197,36 @@
 
       return true;
     });
+  }
+
+  // Labels that stand in for a custom-styled (hidden) checkbox, so it is
+  // hit-tested and highlighted through them (issue #1). The input itself is
+  // still what gets clicked. Radios are left out on purpose: hidden radios
+  // drive CSS-only tabs and star ratings. So is a hidden checkbox that declares
+  // another role, such as MediaWiki's table-of-contents toggle (role="button").
+  // [] for every other element.
+  // Within one selection update every element is asked up to three times
+  // (filter, hit test, highlight) and each answer reads computed styles and
+  // boxes, so updateSelection() shares one cache for the whole update.
+  let proxyCache = null;
+  function proxyLabels(el) {
+    if (proxyCache && proxyCache.has(el)) return proxyCache.get(el);
+    const labels = findProxyLabels(el);
+    if (proxyCache) proxyCache.set(el, labels);
+    return labels;
+  }
+
+  function findProxyLabels(el) {
+    if (!(el instanceof HTMLInputElement) || el.type !== 'checkbox') return [];
+    const role = el.getAttribute('role');
+    if (role && role !== 'checkbox' && role !== 'switch') return [];
+    const labels = Array.from(el.labels || []);
+    if (labels.length === 0) return [];
+    const stateOf = node => ({
+      hidden: isStyleHidden(window.getComputedStyle(node)),
+      rect: node.getBoundingClientRect()
+    });
+    return proxyLabelIndexes(stateOf(el), labels.map(stateOf)).map(i => labels[i]);
   }
 
   function getElementRect(el) {
@@ -827,14 +858,24 @@
   // ============================================
 
   function updateSelection() {
+    proxyCache = new Map();
+    try {
+      applySelection();
+    } finally {
+      proxyCache = null;
+    }
+  }
+
+  function applySelection() {
     const selRect = getSelectionRect();
     const elements = getSelectableElements();
 
     const currentlyInLasso = new Set();
 
     elements.forEach(el => {
-      const elRect = getElementRect(el);
-      if (rectsIntersect(selRect, elRect)) {
+      const proxies = proxyLabels(el);
+      const rects = proxies.length > 0 ? proxies.map(getElementRect) : [getElementRect(el)];
+      if (rects.some(r => rectsIntersect(selRect, r))) {
         currentlyInLasso.add(el);
       }
     });
@@ -850,14 +891,21 @@
       state.selectedElements = currentlyInLasso;
     }
 
-    // Update visual highlights
+    // Update visual highlights: the element itself, or the labels standing in
+    // for a hidden checkbox (an opacity-0 input shows no outline)
+    const highlighted = new Set();
+    state.selectedElements.forEach(el => {
+      const proxies = proxyLabels(el);
+      (proxies.length > 0 ? proxies : [el]).forEach(target => highlighted.add(target));
+    });
+
     document.querySelectorAll('.snaplinkit-highlighted').forEach(el => {
-      if (!state.selectedElements.has(el)) {
+      if (!highlighted.has(el)) {
         el.classList.remove('snaplinkit-highlighted');
       }
     });
 
-    state.selectedElements.forEach(el => {
+    highlighted.forEach(el => {
       el.classList.add('snaplinkit-highlighted');
     });
   }
