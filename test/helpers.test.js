@@ -8,9 +8,9 @@ test('SnapLinkitLib exposes every helper and is frozen', () => {
   assert.deepEqual(Object.keys(lib).sort(), [
     'DOWNLOAD_EXTENSIONS', 'OPENABLE_PROTOCOLS', 'RELEASE_ACTIONS', 'WHATS_NEW_SHORTCUTS', 'WHATS_NEW_VERSION',
     'TRACKED_CHECKBOX_SELECTOR', 'TRACKED_TABLE_SELECTOR', 'afterClickOutcome', 'blacklistBytes', 'carefulCheckboxMessage', 'carefulConfirmText',
-    'carefulProgressMessage', 'clampMenuAxis', 'dragModifierMode', 'filenameFromUrl', 'fitMenuAxis', 'formatDurationEstimate', 'formatShortcut',
+    'carefulProgressMessage', 'carefulFallbackMessage', 'carefulNotStartedMessage', 'clampMenuAxis', 'faultMatches', 'dragModifierMode', 'filenameFromUrl', 'fitMenuAxis', 'formatDurationEstimate', 'formatShortcut',
     'isDownloadableUrl', 'isOpenableUrl', 'isStyleHidden', 'isTrackedCheckbox', 'isValidPattern', 'isVersionBefore', 'majorityShouldCheck',
-    'matchesPattern', 'normalizeReleaseAction', 'ordinaryCheckboxMessage', 'plural',
+    'matchesPattern', 'normalizeReleaseAction', 'ordinaryCheckboxMessage', 'ordinaryUnreadMessage', 'plural',
     'proxyLabelIndexes', 'rectsIntersect', 'selectionRect', 'shouldOfferWhatsNew', 'whatsNewLines', 'whatsNewRecord', 'whatsNewShowsShortcuts',
   ].sort());
   assert.ok(Object.isFrozen(lib));
@@ -459,4 +459,43 @@ test('carefulConfirmText: title, estimate text and button', () => {
   assert.deepEqual(lib.carefulConfirmText(false, 208, 300), {
     title: 'Uncheck 208 items?', message: 'Snap Linkit will save them one at a time. This takes about 1 minute.', confirmLabel: 'Uncheck All',
   });
+});
+
+// ---- Brief 2b: no silent or wrong message around a careful run ----
+
+test('ordinaryUnreadMessage: admits the boxes were clicked; no trailing period (it can lead a careful message)', () => {
+  assert.equal(lib.ordinaryUnreadMessage(), "Snap Linkit clicked the checkboxes, but couldn't check the result");
+});
+
+test('carefulFallbackMessage: says how far the run got', () => {
+  const f = lib.carefulFallbackMessage;
+  assert.equal(f('before', null, 35), 'Stopped: Snap Linkit hit an error before saving. Nothing was changed (0 of 35 items).');
+  assert.equal(f('before', null, 1), 'Stopped: Snap Linkit hit an error before saving. Nothing was changed (0 of 1 item).');
+  assert.equal(f('after', { kind: 'done', target: true, n: 10, k: 10 }, 10),
+    'Snap Linkit hit an error showing the result: 10 of 10 items checked and saved. Reload to check.');
+  assert.equal(f('after', { kind: 'failed', target: false, n: 3, k: 7 }, 7),
+    'Snap Linkit hit an error showing the result: 3 of 7 items unchecked and saved. Reload to check.');
+  // No counts: never invents numbers
+  for (const [stage, c] of [['running', null], ['after', null], ['after', { n: 'x', k: 3 }], ['nonsense', null]]) {
+    assert.equal(f(stage, c, 5), 'Stopped: Snap Linkit hit an error while saving. Reload to check what was saved.', stage);
+  }
+});
+
+test('carefulNotStartedMessage: the confirm could not be shown, so nothing was saved', () => {
+  assert.equal(lib.carefulNotStartedMessage('busy', 35),
+    'Another Snap Linkit dialog is open. Close it and drag again. Nothing was saved (0 of 35 items).');
+  assert.equal(lib.carefulNotStartedMessage('failed', 31),
+    "Stopped: Snap Linkit couldn't open its confirm dialog. Nothing was saved (0 of 31 items).");
+});
+
+test('faultMatches: lab fault list ("name" or "name@N", comma separated)', () => {
+  const m = lib.faultMatches;
+  assert.equal(m('report', 'report'), true);
+  assert.equal(m('report, progress@3', 'progress', 3), true);
+  assert.equal(m('report,progress@3', 'progress', 2), false);
+  assert.equal(m('progress@3', 'progress'), false);
+  assert.equal(m('reportx', 'report'), false);
+  assert.equal(m('progress@', 'progress', 0), false);
+  assert.equal(m('a@1@2', 'a', 1), false);
+  for (const spec of [null, undefined, '', '  ', 42, {}]) assert.equal(m(spec, 'report'), false, String(spec));
 });

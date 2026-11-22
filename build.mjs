@@ -9,6 +9,10 @@
  *                             -> dist/test/<target> and dist/test/snap_linkit-<target>-<version>-test.zip: the same
  *                                files, except that content.js logs one console line per Fandom checkbox save
  *                                (SAVE_LOG on). For test builds only; never for a store upload.
+ *   node build.mjs --faults [firefox|chrome]
+ *                             -> dist/lab/<target> and dist/lab/snap_linkit-<target>-<version>-lab.zip: the test build
+ *                                plus failure injection (FAULTS on: the page can make named steps fail through
+ *                                <html data-snaplinkit-fault>). For the lab harness only; never for Rob or a store.
  *
  * chrome/ holds only what Chrome needs to be different: manifest.json (service worker, no
  * browser_specific_settings, minimum_chrome_version, Chrome 128 px icon), sw.js, images/icon128-chrome.png and
@@ -94,8 +98,18 @@ function writeZip(zipPath, baseDir, files) {
 // Test builds: the one line of content.js that turns the per-save console line on. Must occur exactly once.
 const SAVE_LOG_OFF = 'const SAVE_LOG = false;';
 const SAVE_LOG_ON = 'const SAVE_LOG = true; ';
+// Lab builds: the one line that turns failure injection on. Must occur exactly once.
+const FAULTS_OFF = 'const FAULTS = false;';
+const FAULTS_ON = 'const FAULTS = true; ';
 
-export function buildTarget(target, outDir = path.join(ROOT, 'dist'), { test = false } = {}) {
+// Replace the one occurrence of `off` with `on`, or throw
+function switchOn(text, off, on, what) {
+  if (text.split(off).length !== 2) throw new Error(`build: ${what} needs exactly one "${off}" in content.js`);
+  return text.replace(off, on);
+}
+
+export function buildTarget(target, outDir = path.join(ROOT, 'dist'), { test = false, faults = false } = {}) {
+  if (faults && !test) throw new Error('build: a fault-injection build is also a test build');
   if (!(target in OVERLAYS)) throw new Error(`build: unknown target "${target}" (firefox or chrome)`);
   const version = manifestVersion(path.join(SRC, 'manifest.json'));
   const overlay = OVERLAYS[target];
@@ -114,11 +128,11 @@ export function buildTarget(target, outDir = path.join(ROOT, 'dist'), { test = f
   }
   if (test) {
     const cs = path.join(dir, 'content.js');
-    const text = fs.readFileSync(cs, 'utf8');
-    if (text.split(SAVE_LOG_OFF).length !== 2) throw new Error(`build: test build needs exactly one "${SAVE_LOG_OFF}" in content.js`);
-    fs.writeFileSync(cs, text.replace(SAVE_LOG_OFF, SAVE_LOG_ON));
+    let text = switchOn(fs.readFileSync(cs, 'utf8'), SAVE_LOG_OFF, SAVE_LOG_ON, 'a test build');
+    if (faults) text = switchOn(text, FAULTS_OFF, FAULTS_ON, 'a fault-injection build');
+    fs.writeFileSync(cs, text);
   }
-  const zip = path.join(outDir, `snap_linkit-${target}-${version}${test ? '-test' : ''}.zip`);
+  const zip = path.join(outDir, `snap_linkit-${target}-${version}${faults ? '-lab' : test ? '-test' : ''}.zip`);
   writeZip(zip, dir, files);
   const sha256 = crypto.createHash('sha256').update(fs.readFileSync(zip)).digest('hex');
   return { target, dir, zip, version, files, sha256 };
@@ -126,11 +140,13 @@ export function buildTarget(target, outDir = path.join(ROOT, 'dist'), { test = f
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const args = process.argv.slice(2);
-  const test = args.includes('--test');
-  const named = args.filter((a) => a !== '--test');
+  const faults = args.includes('--faults');
+  const test = faults || args.includes('--test');
+  const named = args.filter((a) => a !== '--test' && a !== '--faults');
   const targets = named.length ? named : ['firefox', 'chrome'];
   for (const t of targets) {
-    const r = test ? buildTarget(t, path.join(ROOT, 'dist', 'test'), { test: true }) : buildTarget(t);
+    const r = faults ? buildTarget(t, path.join(ROOT, 'dist', 'lab'), { test: true, faults: true })
+      : test ? buildTarget(t, path.join(ROOT, 'dist', 'test'), { test: true }) : buildTarget(t);
     console.log(`${r.target} ${r.version}: ${r.files.length} files -> ${path.relative(ROOT, r.zip)} (sha256 ${r.sha256})`);
   }
 }

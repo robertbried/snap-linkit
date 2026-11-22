@@ -12,7 +12,8 @@
     isDownloadableUrl, majorityShouldCheck, plural, fitMenuAxis, clampMenuAxis,
     normalizeReleaseAction, dragModifierMode, isStyleHidden, proxyLabelIndexes,
     TRACKED_TABLE_SELECTOR, isTrackedCheckbox, afterClickOutcome, ordinaryCheckboxMessage,
-    carefulCheckboxMessage, carefulProgressMessage, carefulConfirmText
+    carefulCheckboxMessage, carefulProgressMessage, carefulConfirmText,
+    ordinaryUnreadMessage, carefulFallbackMessage, carefulNotStartedMessage, faultMatches
   } = globalThis.SnapLinkitLib;
 
   // ============================================
@@ -38,6 +39,10 @@
   // One console line per save, for Rob's measurement. Test build only:
   // `node build.mjs --test` switches it on in the packaged copy; src/ keeps it off.
   const SAVE_LOG = false;
+  // Failure injection for the brief 2b lab tests. Lab builds only:
+  // `node build.mjs --faults` switches it on in the packaged copy; src/, the
+  // store zips and Rob's test zips keep it off, so faultActive() is always false.
+  const FAULTS = false;
 
   // ============================================
   // STATE
@@ -631,7 +636,8 @@
   function showConfirmDialog(text, onConfirm, onCancel) {
     // One confirm at a time: a second request while it shows (e.g. the
     // shortcut pressed again) is ignored, so Open All cannot run twice.
-    if (confirmShowing()) return false;
+    if (confirmShowing() || faultActive('confirmBusy')) return false;
+    faultPoint('confirm');
     // The menu acts on the same selection; close it so it cannot be clicked
     // while the confirm is up (it would otherwise sit above the backdrop).
     hideMenu();
@@ -657,8 +663,9 @@
     buttons.append(cancelBtn, confirmBtn);
     dialog.append(title, message, buttons);
 
-    document.body.appendChild(overlay);
-    document.body.appendChild(dialog);
+    const root = uiRoot();
+    root.appendChild(overlay);
+    root.appendChild(dialog);
 
     const previousFocus = document.activeElement;
     const cleanup = () => {
@@ -708,6 +715,38 @@
   // is pressed, or another toast replaces it; a sticky toast that is already
   // showing is updated in place, so progress does not flicker.
   const STICKY_ATTR = 'data-snaplinkit-sticky';
+
+  // Where Snap Linkit's messages and dialogs go: <body>, or the root element
+  // on a page without one (null only if the document has no element at all)
+  function uiRoot() {
+    return document.body || document.documentElement;
+  }
+
+  // Lab builds only (FAULTS): true when the page names this point in
+  // <html data-snaplinkit-fault="...">, so the brief 2b tests can make a step
+  // fail on purpose. Always false in every other build.
+  function faultActive(name, n) {
+    if (!FAULTS) return false;
+    const root = document.documentElement;
+    return Boolean(root) && faultMatches(root.getAttribute('data-snaplinkit-fault'), name, n);
+  }
+
+  function faultPoint(name, n) {
+    if (faultActive(name, n)) throw new Error(`Snap Linkit: injected fault "${name}"`);
+  }
+
+  // showToast for results that must not be lost: if the message cannot be
+  // shown at all, it goes to the console with its details. Never throws.
+  function showToastOrLog(message, opts, details) {
+    try {
+      showToast(message, opts);
+      return true;
+    } catch (error) {
+      console.error(`[Snap Linkit] Could not show this message: ${message}`, details === undefined ? '' : details, error);
+      return false;
+    }
+  }
+
   function showToast(message, { sticky = false } = {}) {
     const existing = document.querySelector('.snaplinkit-toast');
     if (sticky && existing && existing.isConnected && existing.getAttribute(STICKY_ATTR) === '1') {
@@ -725,7 +764,7 @@
       toast.style.cursor = 'pointer';
       toast.addEventListener('click', () => toast.remove());
     }
-    document.body.appendChild(toast);
+    uiRoot().appendChild(toast);
 
     if (!sticky) setTimeout(() => toast.remove(), 2500);
   }
@@ -929,6 +968,7 @@
       if (isChecked(el) === target) c.n++;
       else c.refused++;
     }
+    faultPoint('ordinary'); // lab builds: the result cannot be read, after the boxes were clicked
     return c;
   }
 
@@ -942,6 +982,7 @@
   let carefulRun = null; // { stop, ignoredDrag, i, k } while a run is going
 
   function showCarefulProgress(run) {
+    faultPoint('progress', run.i); // lab builds: a fault inside the run, before item i is clicked
     showToast(carefulProgressMessage(run.i, run.k, run.ignoredDrag), { sticky: true });
   }
 
@@ -983,6 +1024,7 @@
       timeoutSec: CHECKBOX_SAVE_TIMEOUT_MS / 1000, kind: 'done' };
     let processed = 0; // queue positions dealt with (saved, skipped, or where the run stopped)
     let clicks = 0;
+    let clickedAt = 0; // the queue position last clicked
     const stopAt = (kind, i) => { c.kind = kind; c.i = i; processed = i; };
     try {
       for (let idx = 0; idx < k; idx++) {
@@ -999,6 +1041,7 @@
         const t0 = performance.now();
         try {
           el.click();
+          clickedAt = i;
         } catch (error) {
           console.warn('[Snap Linkit] Could not toggle element:', el, error);
           logSave(i, k, 'failed (click threw)', t0);
@@ -1039,7 +1082,13 @@
     } catch (error) {
       // A fault in Snap Linkit itself: say so rather than report a result
       console.error('[Snap Linkit] Careful save run failed:', error);
-      stopAt('error', Math.max(run.i, 1));
+      // The item the fault hit: the one clicked last if its save never
+      // finished, otherwise the next one, which was never clicked and so
+      // still counts as "not tried"
+      const done = processed;
+      const clickedCurrent = clickedAt > done;
+      stopAt('error', clickedCurrent ? clickedAt : Math.min(done + 1, Math.max(k, 1)));
+      if (!clickedCurrent) processed = done;
     } finally {
       if (carefulRun === run) carefulRun = null;
     }
@@ -1063,7 +1112,7 @@
     const ordinaryDone = ordinary.length > 0 ? toggleOrdinaryCheckboxes(ordinary, target) : null;
     if (tracked.length === 0) {
       clearSelection();
-      ordinaryDone.then((c) => showToast(ordinaryCheckboxMessage(c)));
+      showOrdinaryResult(ordinaryDone);
       return;
     }
 
@@ -1075,36 +1124,113 @@
       else queue.push(el);
     }
 
-    // A mixed selection: the ordinary result leads the final message
-    const finish = async (carefulText, sticky) => {
-      const lead = ordinaryDone ? `${ordinaryCheckboxMessage(await ordinaryDone)}. ` : '';
-      showToast(lead + carefulText, { sticky });
+    // A careful run, then its message. `progress.stage` says how far it got,
+    // so a fault anywhere around the run is reported for what it is
+    // (reportCarefulFault) instead of only reaching the console.
+    const start = () => {
+      const progress = { stage: 'before', c: null };
+      return (async () => {
+        faultPoint('beforeRun'); // lab builds: a fault before the run (as if clearSelection threw)
+        clearSelection();
+        progress.stage = 'running';
+        progress.c = await runCarefulSaves(queue, target, pre);
+        progress.stage = 'after';
+        // A mixed selection: the ordinary result leads. It is read on its own
+        // (never rejects), so the careful result shows whatever happens to it.
+        const ord = ordinaryDone ? await ordinaryResult(ordinaryDone) : null;
+        const lead = ord ? `${ord.text}. ` : '';
+        faultPoint('report'); // lab builds: showing the final message fails
+        // Every message but plain success stays until dismissed (so does one
+        // whose ordinary part could not be read)
+        showToast(lead + carefulCheckboxMessage(progress.c),
+          { sticky: progress.c.kind !== 'done' || Boolean(ord && !ord.ok) });
+      })().catch((error) => {
+        console.error('[Snap Linkit] Could not report the checkbox result:', error);
+        return reportCarefulFault(progress, queue.length, ordinaryDone);
+      }).catch((error) => {
+        // reportCarefulFault never rejects; kept so no path is left unhandled
+        console.error('[Snap Linkit] Could not report the checkbox fault:', error);
+      });
     };
 
-    const start = () => (async () => {
-      clearSelection();
-      const c = await runCarefulSaves(queue, target, pre);
-      // Every message but plain success stays until dismissed
-      await finish(carefulCheckboxMessage(c), c.kind !== 'done');
-    })().catch((error) => {
-      // runCarefulSaves never rejects; this is the message step failing
-      console.error('[Snap Linkit] Could not report the checkbox result:', error);
-    });
-
     if (queue.length > CHECKBOX_CONFIRM_ABOVE) {
-      const shown = showConfirmDialog(
-        carefulConfirmText(target, queue.length, CHECKBOX_SAVE_GAP_MS + CHECKBOX_SAVE_ESTIMATE_MS),
-        start,
-        () => {
-          // Cancel clicks nothing (ordinary boxes were already done)
-          clearSelection();
-          if (ordinaryDone) ordinaryDone.then((c) => showToast(ordinaryCheckboxMessage(c)));
-        }
-      );
-      if (!shown) clearSelection();
+      let shown;
+      try {
+        shown = showConfirmDialog(
+          carefulConfirmText(target, queue.length, CHECKBOX_SAVE_GAP_MS + CHECKBOX_SAVE_ESTIMATE_MS),
+          start,
+          () => {
+            // Cancel clicks nothing (ordinary boxes were already done)
+            clearSelection();
+            if (ordinaryDone) showOrdinaryResult(ordinaryDone);
+          }
+        );
+      } catch (error) {
+        console.error('[Snap Linkit] Could not open the confirm dialog:', error);
+        removeConfirmLeftovers();
+        shown = 'failed';
+      }
+      if (shown !== true) {
+        // No dialog, so no run: say so (with the ordinary result in a mixed drag)
+        reportNotStarted(shown === false ? 'busy' : 'failed', queue.length, ordinaryDone);
+        clearSelection();
+      }
       return;
     }
     start();
+  }
+
+  // The ordinary boxes' result as a message. Never rejects: if the result
+  // cannot be read, the message says the boxes were clicked but not checked.
+  async function ordinaryResult(ordinaryDone) {
+    try {
+      return { text: ordinaryCheckboxMessage(await ordinaryDone), ok: true };
+    } catch (error) {
+      console.error('[Snap Linkit] Could not check the checkbox result:', error);
+      return { text: ordinaryUnreadMessage(), ok: false };
+    }
+  }
+
+  // Ordinary boxes only: their message (sticky if it could not be read)
+  function showOrdinaryResult(ordinaryDone) {
+    ordinaryResult(ordinaryDone)
+      .then((r) => showToastOrLog(r.text, { sticky: !r.ok }))
+      .catch((error) => console.error('[Snap Linkit] Could not report the checkbox result:', error));
+  }
+
+  // Last resort after a fault around a careful run. The message says how far
+  // the run got, and it replaces the progress line (a sticky toast is updated
+  // in place), so "Saving i of k…" cannot stay on screen. If even this cannot
+  // be shown, the progress line is removed and the counts go to the console.
+  async function reportCarefulFault(progress, k, ordinaryDone) {
+    const lead = ordinaryDone ? `${(await ordinaryResult(ordinaryDone)).text}. ` : '';
+    const text = lead + carefulFallbackMessage(progress.stage, progress.c, k);
+    try {
+      faultPoint('fallback'); // lab builds: even the fallback message fails
+      showToast(text, { sticky: true });
+    } catch (error) {
+      try { dismissStickyToast(); } catch (_) { /* nowhere left to show anything */ }
+      console.error(`[Snap Linkit] Could not show the checkbox result: ${text}`,
+        { stage: progress.stage, counts: progress.c }, error);
+    }
+  }
+
+  // The confirm before a big careful run could not be shown: nothing was saved
+  function reportNotStarted(reason, k, ordinaryDone) {
+    const careful = carefulNotStartedMessage(reason, k);
+    const text = ordinaryDone
+      ? ordinaryResult(ordinaryDone).then((r) => `${r.text}. ${careful}`)
+      : Promise.resolve(careful);
+    text.then((t) => showToastOrLog(t, { sticky: true }, { reason, k }))
+      .catch((error) => console.error('[Snap Linkit] Could not report the checkbox result:', error));
+  }
+
+  // A confirm that failed half-way must not leave its backdrop over the page
+  function removeConfirmLeftovers() {
+    try {
+      document.querySelectorAll('.snaplinkit-confirm-overlay, .snaplinkit-confirm').forEach((el) => el.remove());
+    } catch (_) { /* nothing to clean up */ }
+    confirmDialog = null;
   }
 
   // Radios: select the first one in the selection

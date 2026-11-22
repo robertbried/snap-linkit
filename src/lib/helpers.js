@@ -348,6 +348,52 @@
     };
   }
 
+  // ---- Brief 2b: no silent or wrong message when something around a careful run fails ----
+
+  // Ordinary checkboxes whose result could not be read. They were clicked, so
+  // the message must not say that nothing changed. No trailing period: in a
+  // mixed drag it leads the careful message, as ordinaryCheckboxMessage does.
+  function ordinaryUnreadMessage() {
+    return 'Snap Linkit clicked the checkboxes, but couldn\'t check the result';
+  }
+
+  // Last-resort message after a fault around a careful run, by how far it got:
+  //   'before'   the run never started: nothing was clicked
+  //   'running'  the run itself failed and left no counts
+  //   'after'    the run finished with counts c; showing its message failed
+  // k: the boxes that needed saving.
+  function carefulFallbackMessage(stage, c, k) {
+    if (stage === 'before') {
+      return `Stopped: Snap Linkit hit an error before saving. Nothing was changed (0 of ${plural(k, 'item')}).`;
+    }
+    if (stage === 'after' && c && Number.isFinite(c.n) && Number.isFinite(c.k)) {
+      const v = c.target ? 'checked' : 'unchecked';
+      return `Snap Linkit hit an error showing the result: ${c.n} of ${plural(c.k, 'item')} ${v} and saved. Reload to check.`;
+    }
+    return 'Stopped: Snap Linkit hit an error while saving. Reload to check what was saved.';
+  }
+
+  // The confirm before a big careful run could not be shown, so nothing was
+  // saved: 'busy' (another Snap Linkit dialog is open) or 'failed'.
+  function carefulNotStartedMessage(reason, k) {
+    const nothing = `Nothing was saved (0 of ${plural(k, 'item')}).`;
+    return reason === 'busy'
+      ? `Another Snap Linkit dialog is open. Close it and drag again. ${nothing}`
+      : `Stopped: Snap Linkit couldn't open its confirm dialog. ${nothing}`;
+  }
+
+  // Lab builds only (build.mjs --faults): does the fault list spec, e.g.
+  // "report,progress@3", name this point? "name" always matches; "name@N"
+  // only when n === N. Anything that is not a non-empty string matches nothing.
+  function faultMatches(spec, name, n) {
+    if (typeof spec !== 'string' || spec.trim() === '') return false;
+    return spec.split(',').some((entry) => {
+      const [fname, at, extra] = entry.trim().split('@');
+      if (extra !== undefined || fname !== name) return false;
+      return at === undefined || (at !== '' && Number(at) === n);
+    });
+  }
+
   // Characters the downloads API rejects in a filename: backslash, slash,
   // colon, star, question mark, quote, angle brackets, pipe, and the ASCII
   // control range (built from char codes so this file stays free of them).
@@ -476,6 +522,10 @@
     carefulProgressMessage,
     formatDurationEstimate,
     carefulConfirmText,
+    ordinaryUnreadMessage,
+    carefulFallbackMessage,
+    carefulNotStartedMessage,
+    faultMatches,
     filenameFromUrl,
     WHATS_NEW_VERSION,
     WHATS_NEW_SHORTCUTS,
