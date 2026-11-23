@@ -8,7 +8,8 @@
 
   // Pure helpers live in lib/helpers.js (loaded first by the manifest)
   const {
-    isOpenableUrl, matchesPattern, rectsIntersect, selectionRect,
+    isOpenableUrl, matchesPattern, rectsIntersect, rectFromPoints, dragStartPoint,
+    uniqueMatch, dragPageChangedMessage,
     isDownloadableUrl, majorityShouldCheck, plural, fitMenuAxis, clampMenuAxis,
     normalizeReleaseAction, dragModifierMode, isStyleHidden, proxyLabelIndexes,
     TRACKED_TABLE_SELECTOR, isTrackedCheckbox, afterClickOutcome, ordinaryCheckboxMessage,
@@ -61,6 +62,7 @@
     persistentSelection: new Set(),
     modifierMode: null,
     scrollInterval: null,
+    anchor: null,        // { el, offX, offY, key, root }: the element pressed (brief 3); null = old maths
   };
 
   // Extension active state (can be disabled via blacklist)
@@ -261,13 +263,116 @@
     };
   }
 
-  // Scroll-aware selection rectangle (pure core: selectionRect in lib/helpers.js)
+  // Selection rectangle in viewport px. Its start is tied to the element the
+  // drag was pressed on (brief 3), so content above it that changes height
+  // mid-drag (an ad, lazy content) can't move the start; without an anchor it
+  // is the press point moved by the scroll since (pure core: dragStartPoint).
   function getSelectionRect() {
-    return selectionRect(
-      { x: state.startX, y: state.startY, scrollX: state.startScrollX, scrollY: state.startScrollY },
-      { x: state.currentX, y: state.currentY },
-      { x: window.scrollX, y: window.scrollY }
+    const a = state.anchor;
+    const start = dragStartPoint(
+      a ? { offX: a.offX, offY: a.offY } : null,
+      a ? anchorBox(a.el) : null,
+      { x: window.scrollX, y: window.scrollY },
+      { x: state.startX, y: state.startY, scrollX: state.startScrollX, scrollY: state.startScrollY }
     );
+    return rectFromPoints(start, { x: state.currentX, y: state.currentY });
+  }
+
+  // ---- The drag's anchor (brief 3) ----
+
+  // An element node (nodeType 1: the same test in every frame and world)
+  function isElementNode(n) {
+    return !!n && n.nodeType === 1 && typeof n.getBoundingClientRect === 'function';
+  }
+
+  // The element's box, or null when it has left the page or has no box (0x0)
+  function anchorBox(el) {
+    if (!el || !el.isConnected) return null;
+    const r = el.getBoundingClientRect();
+    return r.width === 0 && r.height === 0 ? null : r;
+  }
+
+  // Inside a position: fixed or sticky element (crossing shadow roots)? Such an
+  // element stays put while the page scrolls, so a start tied to it would move
+  // with the window: those drags keep the old maths.
+  function inFixedOrSticky(el) {
+    for (let n = el; isElementNode(n); n = n.parentElement || (typeof n.getRootNode === 'function' && n.getRootNode().host) || null) {
+      const pos = window.getComputedStyle(n).position;
+      if (pos === 'fixed' || pos === 'sticky') return true;
+    }
+    return false;
+  }
+
+  function linkText(a) {
+    return a.textContent.replace(/\s+/g, ' ').trim();
+  }
+
+  // How to find the same element again if the page replaces it: a Fandom
+  // tracking label by its box's table and row, else an id, else a link by its
+  // href and text. null = no trustworthy key.
+  function anchorKey(el) {
+    if (el.localName === 'label' && el.control && isTrackedBox(el.control)) {
+      return { kind: 'tracked', tableId: el.control.getAttribute('data-table-id'), rowId: el.control.getAttribute('data-tpt-row-id') };
+    }
+    if (el.id) return { kind: 'id', id: el.id };
+    if (el instanceof HTMLAnchorElement) return { kind: 'link', href: el.href, text: linkText(el) };
+    return null;
+  }
+
+  // The one element matching the key (connected, with a box), or null for
+  // none or several
+  function refindAnchor(key, root) {
+    if (!key || !root || typeof root.querySelectorAll !== 'function') return null;
+    let found = null;
+    if (key.kind === 'tracked') {
+      const box = uniqueMatch(Array.from(root.querySelectorAll('input[type="checkbox"][data-table-id][data-tpt-row-id]'))
+        .filter(i => i.getAttribute('data-table-id') === key.tableId && i.getAttribute('data-tpt-row-id') === key.rowId && isTrackedBox(i)));
+      found = box ? uniqueMatch(Array.from(box.labels || []).filter(l => anchorBox(l))) : null;
+    } else if (key.kind === 'id') {
+      found = uniqueMatch(Array.from(root.querySelectorAll('#' + CSS.escape(key.id))));
+    } else if (key.kind === 'link') {
+      found = uniqueMatch(Array.from(root.querySelectorAll('a[href]'))
+        .filter(a => a instanceof HTMLAnchorElement && a.href === key.href && linkText(a) === key.text));
+    }
+    return found && anchorBox(found) ? found : null;
+  }
+
+  // At the press: the element under the pointer (the real one inside a shadow
+  // root), or the tracking label / link it sits in, and the pointer's offset
+  // inside it. null keeps the old maths (fixed or sticky, or no box).
+  function pickDragAnchor(e) {
+    const path = typeof e.composedPath === 'function' ? e.composedPath() : [];
+    let el = path.find(isElementNode) || (isElementNode(e.target) ? e.target : null);
+    if (!el || typeof el.closest !== 'function') return null;
+    const label = el.closest('label');
+    if (label && label.control && isTrackedBox(label.control)) {
+      el = label;
+    } else {
+      const link = el.closest('a[href]');
+      if (link) el = link;
+    }
+    if (inFixedOrSticky(el)) return null;
+    const r = anchorBox(el);
+    if (!r) return null;
+    const root = typeof el.getRootNode === 'function' ? el.getRootNode() : document;
+    return { el, offX: e.clientX - r.left, offY: e.clientY - r.top, key: anchorKey(el), root };
+  }
+
+  // Before each update: is the pressed element still there? If the page
+  // replaced it, find it again by its key; when that isn't possible, cancel
+  // the drag and say so on screen (nothing is clicked, opened or saved; the
+  // browser menu stays blocked on the release). false = cancelled.
+  function refreshDragAnchor() {
+    const a = state.anchor;
+    if (!a || anchorBox(a.el)) return true;
+    const found = refindAnchor(a.key, a.root);
+    if (found) {
+      a.el = found;
+      return true;
+    }
+    cancelSelection();
+    showToastOrLog(dragPageChangedMessage(), { sticky: true });
+    return false;
   }
 
   function getUniqueUrls() {
@@ -1318,6 +1423,7 @@
   function cancelSelection() {
     state.isSelecting = false;
     state.isDragging = false;
+    state.anchor = null;
     stopAutoScroll();
     if (lassoEl) lassoEl.style.display = 'none';
     document.body.classList.remove('snaplinkit-selecting');
@@ -1359,7 +1465,9 @@
 
       if (scrollX !== 0 || scrollY !== 0) {
         window.scrollBy(scrollX, scrollY);
-        // NO mutation of state.startX/startY - getSelectionRect() handles scroll delta
+        // NO mutation of state.startX/startY - getSelectionRect() follows the
+        // pressed element (or the scroll delta when there is no anchor)
+        if (!refreshDragAnchor()) return;
         updateLasso();
         updateSelection();
       }
@@ -1408,6 +1516,7 @@
     state.startY = e.clientY;
     state.startScrollX = window.scrollX;
     state.startScrollY = window.scrollY;
+    state.anchor = pickDragAnchor(e);
     state.currentX = e.clientX;
     state.currentY = e.clientY;
     // Ctrl (or, unadvertised, Shift) = add, Alt = remove: see dragModifierMode
@@ -1462,6 +1571,7 @@
       e.preventDefault();
     }
 
+    if (!refreshDragAnchor()) return;
     updateLasso();
     updateSelection();
   }
@@ -1473,6 +1583,7 @@
     const wasDragging = state.isDragging;
     state.isSelecting = false;
     state.isDragging = false;
+    state.anchor = null;
     stopAutoScroll();
 
     if (lassoEl) lassoEl.style.display = 'none';

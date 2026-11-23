@@ -11,7 +11,7 @@ test('SnapLinkitLib exposes every helper and is frozen', () => {
     'carefulProgressMessage', 'carefulFallbackMessage', 'carefulNotStartedMessage', 'clampMenuAxis', 'faultMatches', 'dragModifierMode', 'filenameFromUrl', 'fitMenuAxis', 'formatDurationEstimate', 'formatShortcut',
     'isDownloadableUrl', 'isOpenableUrl', 'isStyleHidden', 'isTrackedCheckbox', 'isValidPattern', 'isVersionBefore', 'majorityShouldCheck',
     'matchesPattern', 'normalizeReleaseAction', 'ordinaryCheckboxMessage', 'ordinaryUnreadMessage', 'plural',
-    'proxyLabelIndexes', 'rectsIntersect', 'selectionRect', 'shouldOfferWhatsNew', 'whatsNewLines', 'whatsNewRecord', 'whatsNewShowsShortcuts',
+    'proxyLabelIndexes', 'rectsIntersect', 'selectionRect', 'rectFromPoints', 'dragStartPoint', 'uniqueMatch', 'dragPageChangedMessage', 'shouldOfferWhatsNew', 'whatsNewLines', 'whatsNewRecord', 'whatsNewShowsShortcuts',
   ].sort());
   assert.ok(Object.isFrozen(lib));
   assert.equal(globalThis.SnapLinkitLib, lib);
@@ -110,6 +110,70 @@ test('selectionRect: plain drag, reversed drag, and scroll compensation', () => 
   assert.deepEqual(
     lib.selectionRect({ x: 100, y: 10, scrollX: 20, scrollY: 0 }, { x: 100, y: 30 }, { x: 50, y: 0 }),
     { left: 70, top: 10, right: 100, bottom: 30, width: 30, height: 20 });
+});
+
+// Brief 3: the drag start tied to the pressed element (BRIEF-3-DESIGN.md 4.1)
+test('dragStartPoint U1: no layout change, the anchored start equals the old scroll maths', () => {
+  // Pressed at (40, 300) on an element whose box was at (20, 280); the page has since scrolled 500 down, so with
+  // nothing else changing the element's box is now at (20, -220)
+  const start = { x: 40, y: 300, scrollX: 0, scrollY: 0 };
+  const scroll = { x: 0, y: 500 };
+  const anchored = lib.dragStartPoint({ offX: 20, offY: 20 }, { left: 20, top: -220 }, scroll, start);
+  const old = lib.dragStartPoint(null, null, scroll, start);
+  assert.deepEqual(anchored, old);
+  assert.deepEqual(anchored, { x: 40, y: -200 });
+});
+
+test('dragStartPoint U2/U3: content above shrinks or grows by 350: the start follows the element', () => {
+  const start = { x: 40, y: 300, scrollX: 0, scrollY: 0 };
+  const scroll = { x: 0, y: 500 };
+  // Shrink: the element is 350 higher than scrolling alone would put it
+  assert.deepEqual(lib.dragStartPoint({ offX: 20, offY: 20 }, { left: 20, top: -570 }, scroll, start), { x: 40, y: -550 });
+  // Grow: 350 lower
+  assert.deepEqual(lib.dragStartPoint({ offX: 20, offY: 20 }, { left: 20, top: 130 }, scroll, start), { x: 40, y: 150 });
+  // The old maths would have stayed at y = -200 in both cases (the bug)
+  assert.deepEqual(lib.dragStartPoint(null, null, scroll, start), { x: 40, y: -200 });
+});
+
+test('dragStartPoint U4: an anchor without a box is a caller error, not a silent fallback', () => {
+  assert.throws(() => lib.dragStartPoint({ offX: 1, offY: 1 }, null, { x: 0, y: 0 }, { x: 0, y: 0, scrollX: 0, scrollY: 0 }),
+    /no box/);
+});
+
+test('uniqueMatch U5: only an unambiguous match counts', () => {
+  assert.equal(lib.uniqueMatch([]), null);
+  assert.equal(lib.uniqueMatch(['a']), 'a');
+  assert.equal(lib.uniqueMatch(['a', 'b']), null);
+  assert.equal(lib.uniqueMatch(null), null);
+});
+
+test('dragStartPoint U6: no anchor gives exactly what selectionRect used before brief 3', () => {
+  const cases = [
+    [{ x: 10, y: 100, scrollX: 0, scrollY: 0 }, { x: 0, y: 40 }],
+    [{ x: 100, y: 10, scrollX: 20, scrollY: 0 }, { x: 50, y: 0 }],
+    [{ x: 7.5, y: 3.25, scrollX: 1.5, scrollY: 2.75 }, { x: 0.5, y: 900.125 }],
+  ];
+  for (const [start, scroll] of cases) {
+    assert.deepEqual(lib.dragStartPoint(null, null, scroll, start),
+      { x: start.x - (scroll.x - start.scrollX), y: start.y - (scroll.y - start.scrollY) });
+  }
+});
+
+test('dragStartPoint U7: the pointer offset inside the element is kept', () => {
+  // Pressed 30 px below the element's top and 12 px in from its left
+  assert.deepEqual(lib.dragStartPoint({ offX: 12, offY: 30 }, { left: 100, top: 200 }, { x: 0, y: 0 },
+    { x: 0, y: 0, scrollX: 0, scrollY: 0 }), { x: 112, y: 230 });
+});
+
+test('rectFromPoints U8: either way round, same as selectionRect without scroll', () => {
+  const r = { left: 10, top: 10, right: 50, bottom: 30, width: 40, height: 20 };
+  assert.deepEqual(lib.rectFromPoints({ x: 10, y: 10 }, { x: 50, y: 30 }), r);
+  assert.deepEqual(lib.rectFromPoints({ x: 50, y: 30 }, { x: 10, y: 10 }), r);
+  assert.deepEqual(lib.selectionRect({ x: 50, y: 30, scrollX: 0, scrollY: 0 }, { x: 10, y: 10 }, { x: 0, y: 0 }), r);
+});
+
+test('dragPageChangedMessage: the on-screen text of decision 2', () => {
+  assert.equal(lib.dragPageChangedMessage(), 'The page changed under the drag; drag again.');
 });
 
 test('isDownloadableUrl: known extensions at the end of the URL, case-insensitive', () => {

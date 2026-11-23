@@ -138,17 +138,46 @@
   // The start point is shifted by the scroll delta instead of being mutated:
   // if the user scrolled down, the start point moves up in viewport space.
   function selectionRect(start, current, scroll) {
-    const scrollDeltaX = scroll.x - start.scrollX;
-    const scrollDeltaY = scroll.y - start.scrollY;
+    return rectFromPoints(dragStartPoint(null, null, scroll, start), current);
+  }
 
-    const adjustedStartX = start.x - scrollDeltaX;
-    const adjustedStartY = start.y - scrollDeltaY;
-
-    const left = Math.min(adjustedStartX, current.x);
-    const top = Math.min(adjustedStartY, current.y);
-    const width = Math.abs(current.x - adjustedStartX);
-    const height = Math.abs(current.y - adjustedStartY);
+  // The rectangle between two viewport points, either way round.
+  function rectFromPoints(a, b) {
+    const left = Math.min(a.x, b.x);
+    const top = Math.min(a.y, b.y);
+    const width = Math.abs(b.x - a.x);
+    const height = Math.abs(b.y - a.y);
     return { left, top, right: left + width, bottom: top + height, width, height };
+  }
+
+  // Where the drag started, in viewport px now (brief 3).
+  //   anchor  { offX, offY } or null   the pointer's offset inside the pressed element
+  //   rect    the pressed element's box now (null only when there is no anchor)
+  //   scroll  { x, y }                 page scroll now
+  //   start   { x, y, scrollX, scrollY } pointer and page scroll at the press
+  // With an anchor, the start moves with the pressed element, so content above
+  // it that changes height mid-drag can't move it. Without one (a press in a
+  // fixed or sticky element, or on a 0x0 box), the start is the press point
+  // moved by the scroll since, as before brief 3. An anchor without a box is a
+  // caller error: the content script finds the element again or cancels first.
+  function dragStartPoint(anchor, rect, scroll, start) {
+    if (!anchor) {
+      return { x: start.x - (scroll.x - start.scrollX), y: start.y - (scroll.y - start.scrollY) };
+    }
+    if (!rect) throw new Error('dragStartPoint: the pressed element has no box (find it again or cancel first)');
+    return { x: rect.left + anchor.offX, y: rect.top + anchor.offY };
+  }
+
+  // The one element of a list, or null for none or several (finding the
+  // pressed element again: only an unambiguous match counts).
+  function uniqueMatch(list) {
+    return list && list.length === 1 ? list[0] : null;
+  }
+
+  // Shown (until clicked) when the pressed element left the page mid-drag and
+  // can't be found again: the drag is cancelled, nothing is done.
+  function dragPageChangedMessage() {
+    return 'The page changed under the drag; drag again.';
   }
 
   // Links that the "Download N Files" action offers (by URL suffix)
@@ -504,6 +533,10 @@
     isStyleHidden,
     proxyLabelIndexes,
     selectionRect,
+    rectFromPoints,
+    dragStartPoint,
+    uniqueMatch,
+    dragPageChangedMessage,
     DOWNLOAD_EXTENSIONS,
     isDownloadableUrl,
     majorityShouldCheck,
