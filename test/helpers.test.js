@@ -11,7 +11,7 @@ test('SnapLinkitLib exposes every helper and is frozen', () => {
     'carefulProgressMessage', 'carefulFallbackMessage', 'carefulNotStartedMessage', 'clampMenuAxis', 'faultMatches', 'dragModifierMode', 'filenameFromUrl', 'fitMenuAxis', 'formatDurationEstimate', 'formatShortcut',
     'isDownloadableUrl', 'isOpenableUrl', 'isStyleHidden', 'isTrackedCheckbox', 'isValidPattern', 'isVersionBefore', 'majorityShouldCheck',
     'matchesPattern', 'normalizeReleaseAction', 'ordinaryCheckboxMessage', 'ordinaryUnreadMessage', 'plural',
-    'proxyLabelIndexes', 'rectsIntersect', 'selectionRect', 'rectFromPoints', 'dragStartPoint', 'uniqueMatch', 'dragPageChangedMessage', 'shouldOfferWhatsNew', 'whatsNewLines', 'whatsNewRecord', 'whatsNewShowsShortcuts',
+    'proxyLabelIndexes', 'rectsIntersect', 'selectionRect', 'rectFromPoints', 'dragStartPoint', 'uniqueMatch', 'dragPageChangedMessage', 'DRAG_OFF_REASONS', 'DRAG_ENDS', 'dragDiagName', 'dragDiagPx', 'dragDiagLine', 'shouldOfferWhatsNew', 'whatsNewLines', 'whatsNewRecord', 'whatsNewShowsShortcuts',
   ].sort());
   assert.ok(Object.isFrozen(lib));
   assert.equal(globalThis.SnapLinkitLib, lib);
@@ -174,6 +174,82 @@ test('rectFromPoints U8: either way round, same as selectionRect without scroll'
 
 test('dragPageChangedMessage: the on-screen text of decision 2', () => {
   assert.equal(lib.dragPageChangedMessage(), 'The page changed under the drag; drag again.');
+});
+
+// Brief 4: the test-build drag line (one per drag)
+const DIAG = {
+  n: 1, end: 'release', protection: 'on', anchor: 'label', key: 'row', refind: 'none', pressed: 'Master Support (Legacy)',
+  moved: 0, gap: 0, selected: 80, boxes: 80, links: 0, first: 'Master Support (Legacy)', last: 'Inspiring',
+  updates: 76, slowest: 212.4, scrollPause: 1810.2,
+};
+const DIAG_RE = /^\[Snap Linkit\] drag (\d+): (.*)$/;
+const diagFields = (line) => Object.fromEntries([...DIAG_RE.exec(line)[2].matchAll(/(\w+)=("[^"]*"|\S+)/g)].map((m) => [m[1], m[2]]));
+
+test('dragDiagLine: the exact line for a normal drag', () => {
+  assert.equal(lib.dragDiagLine(DIAG),
+    '[Snap Linkit] drag 1: end=release protection=on anchor=label key=row refind=none pressed="Master Support (Legacy)" ' +
+    'moved=0px gap=0px selected=80 boxes=80 links=0 first="Master Support (Legacy)" last="Inspiring" ' +
+    'updates=76 slowest=212ms scrollPause=1810ms');
+});
+
+test('dragDiagLine: every end and every protection value', () => {
+  assert.deepEqual([...lib.DRAG_ENDS], ['release', 'esc', 'page-changed', 'switched-off', 'replaced']);
+  for (const end of lib.DRAG_ENDS) assert.equal(diagFields(lib.dragDiagLine({ ...DIAG, end })).end, end);
+  assert.deepEqual({ ...lib.DRAG_OFF_REASONS },
+    { fixedOrSticky: 'fixed-or-sticky', noBox: 'no-box', noElement: 'no-element', threw: 'threw' });
+  assert.ok(Object.isFrozen(lib.DRAG_OFF_REASONS) && Object.isFrozen(lib.DRAG_ENDS));
+  for (const protection of ['on', ...Object.values(lib.DRAG_OFF_REASONS).map((r) => 'off:' + r)]) {
+    assert.equal(diagFields(lib.dragDiagLine({ ...DIAG, protection })).protection, protection);
+  }
+});
+
+test('dragDiagLine: anchor, key and re-find values', () => {
+  for (const anchor of ['label', 'link', 'element', 'none']) assert.equal(diagFields(lib.dragDiagLine({ ...DIAG, anchor })).anchor, anchor);
+  for (const key of ['row', 'id', 'link', 'none']) assert.equal(diagFields(lib.dragDiagLine({ ...DIAG, key })).key, key);
+  for (const refind of ['none', 'found:1', 'found:12', 'cancelled']) assert.equal(diagFields(lib.dragDiagLine({ ...DIAG, refind })).refind, refind);
+});
+
+test('dragDiagName: quoting, whitespace and truncation at 40 characters', () => {
+  assert.equal(lib.dragDiagName('Say "hi"'), '"Say \'hi\'"');
+  assert.equal(lib.dragDiagName('  a\n  b  '), '"a b"');
+  assert.equal(lib.dragDiagName(null), '""');
+  assert.equal(lib.dragDiagName(undefined), '""');
+  assert.equal(lib.dragDiagName('x'.repeat(40)), `"${'x'.repeat(40)}"`);
+  assert.equal(lib.dragDiagName('x'.repeat(41)), `"${'x'.repeat(40)}\u2026"`);
+  assert.equal(lib.dragDiagName('div.wds-checkbox'), '"div.wds-checkbox"');
+});
+
+test('dragDiagPx: signs, rounding and n/a', () => {
+  assert.equal(lib.dragDiagPx(350), '+350px');
+  assert.equal(lib.dragDiagPx(-350), '-350px');
+  assert.equal(lib.dragDiagPx(0), '0px');
+  assert.equal(lib.dragDiagPx(-0.4), '0px');
+  assert.equal(lib.dragDiagPx(0.6), '+1px');
+  assert.equal(lib.dragDiagPx(-349.6), '-350px');
+  for (const v of [null, undefined, NaN, Infinity]) assert.equal(lib.dragDiagPx(v), 'n/a');
+  const f = diagFields(lib.dragDiagLine({ ...DIAG, moved: -350, gap: 350 }));
+  assert.equal(f.moved, '-350px'); assert.equal(f.gap, '+350px');
+  const na = diagFields(lib.dragDiagLine({ ...DIAG, moved: null, gap: null, first: null, last: null, selected: 0, boxes: 0 }));
+  assert.equal(na.moved, 'n/a'); assert.equal(na.gap, 'n/a'); assert.equal(na.first, '""'); assert.equal(na.selected, '0');
+});
+
+test('dragDiagLine: values outside the documented sets throw (the caller reports "drag line failed")', () => {
+  const bad = [
+    { n: 0 }, { n: 1.5 }, { end: 'cancel' }, { protection: 'off' }, { protection: 'off:unknown' }, { protection: 'yes' },
+    { anchor: 'div' }, { key: 'tracked' }, { refind: 'found:0' }, { refind: 'found' }, { selected: -1 }, { boxes: 1.5 },
+    { links: undefined }, { updates: null }, { slowest: -1 }, { scrollPause: NaN },
+  ];
+  for (const b of bad) assert.throws(() => lib.dragDiagLine({ ...DIAG, ...b }), /^Error: dragDiagLine: bad /, JSON.stringify(b));
+});
+
+test('dragDiagLine: the agreed regex parses every field, in the fixed order', () => {
+  const line = lib.dragDiagLine({ ...DIAG, n: 12, end: 'page-changed', protection: 'off:threw', anchor: 'none', key: 'none',
+    refind: 'cancelled', pressed: 'Master "Support"', moved: null, gap: 350, first: 'Master Marksman' });
+  const m = DIAG_RE.exec(line);
+  assert.equal(m[1], '12');
+  assert.deepEqual(Object.keys(diagFields(line)), ['end', 'protection', 'anchor', 'key', 'refind', 'pressed', 'moved', 'gap',
+    'selected', 'boxes', 'links', 'first', 'last', 'updates', 'slowest', 'scrollPause']);
+  assert.equal(diagFields(line).pressed, '"Master \'Support\'"');
 });
 
 test('isDownloadableUrl: known extensions at the end of the URL, case-insensitive', () => {

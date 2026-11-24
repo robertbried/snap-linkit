@@ -9,7 +9,7 @@
   // Pure helpers live in lib/helpers.js (loaded first by the manifest)
   const {
     isOpenableUrl, matchesPattern, rectsIntersect, rectFromPoints, dragStartPoint,
-    uniqueMatch, dragPageChangedMessage,
+    uniqueMatch, dragPageChangedMessage, DRAG_OFF_REASONS, dragDiagLine, TRACKED_CHECKBOX_SELECTOR,
     isDownloadableUrl, majorityShouldCheck, plural, fitMenuAxis, clampMenuAxis,
     normalizeReleaseAction, dragModifierMode, isStyleHidden, proxyLabelIndexes,
     TRACKED_TABLE_SELECTOR, isTrackedCheckbox, afterClickOutcome, ordinaryCheckboxMessage,
@@ -37,7 +37,8 @@
   const CHECKBOX_CONFIRM_ABOVE = 30;      // PROVISIONAL: ask first when more boxes than this need saving
   const CHECKBOX_SAVE_ESTIMATE_MS = 300;  // PROVISIONAL: assumed time of one save, used only for the confirm's estimate
   const SAVING_CLASS = 'is-saving';       // Fandom's class while a box is saving
-  // One console line per save, for Rob's measurement. Test build only:
+  // Test-build console lines: one per Fandom checkbox save (Rob's measurement)
+  // and one per drag (brief 4's diagnostics). Test build only:
   // `node build.mjs --test` switches it on in the packaged copy; src/ keeps it off.
   const SAVE_LOG = false;
   // Failure injection for the brief 2b lab tests. Lab builds only:
@@ -145,7 +146,7 @@
       extensionActive = false;
       if (carefulRun) carefulRun.stop = true; // Escape no longer reaches us; stop before the next click
       detachEventListeners();
-      cancelSelection();
+      cancelSelection('switched-off');
     }
   }
 
@@ -269,12 +270,14 @@
   // is the press point moved by the scroll since (pure core: dragStartPoint).
   function getSelectionRect() {
     const a = state.anchor;
+    const scroll = { x: window.scrollX, y: window.scrollY };
     const start = dragStartPoint(
       a ? { offX: a.offX, offY: a.offY } : null,
       a ? anchorBox(a.el) : null,
-      { x: window.scrollX, y: window.scrollY },
+      scroll,
       { x: state.startX, y: state.startY, scrollX: state.startScrollX, scrollY: state.startScrollY }
     );
+    if (SAVE_LOG && dragDiag) dragDiag.lastStartPageY = start.y + scroll.y; // test builds: the drag line's gap
     return rectFromPoints(start, { x: state.currentX, y: state.currentY });
   }
 
@@ -343,7 +346,8 @@
   function pickDragAnchor(e) {
     const path = typeof e.composedPath === 'function' ? e.composedPath() : [];
     let el = path.find(isElementNode) || (isElementNode(e.target) ? e.target : null);
-    if (!el || typeof el.closest !== 'function') return null;
+    if (!el || typeof el.closest !== 'function') return diagPick(null, DRAG_OFF_REASONS.noElement, el, e);
+    faultPoint('anchor'); // lab builds: choosing the anchor throws (the drag line's "off:threw")
     const label = el.closest('label');
     if (label && label.control && isTrackedBox(label.control)) {
       el = label;
@@ -351,11 +355,11 @@
       const link = el.closest('a[href]');
       if (link) el = link;
     }
-    if (inFixedOrSticky(el)) return null;
+    if (inFixedOrSticky(el)) return diagPick(null, DRAG_OFF_REASONS.fixedOrSticky, el, e);
     const r = anchorBox(el);
-    if (!r) return null;
+    if (!r) return diagPick(null, DRAG_OFF_REASONS.noBox, el, e);
     const root = typeof el.getRootNode === 'function' ? el.getRootNode() : document;
-    return { el, offX: e.clientX - r.left, offY: e.clientY - r.top, key: anchorKey(el), root };
+    return diagPick({ el, offX: e.clientX - r.left, offY: e.clientY - r.top, key: anchorKey(el), root }, null, el, e);
   }
 
   // Before each update: is the pressed element still there? If the page
@@ -368,11 +372,157 @@
     const found = refindAnchor(a.key, a.root);
     if (found) {
       a.el = found;
+      if (SAVE_LOG && dragDiag) dragDiag.refinds++;
       return true;
     }
-    cancelSelection();
+    if (SAVE_LOG && dragDiag) dragDiag.refindCancelled = true;
+    cancelSelection('page-changed');
     showToastOrLog(dragPageChangedMessage(), { sticky: true });
     return false;
+  }
+
+  // ---- Test builds only (SAVE_LOG): one diagnostic console line per drag (brief 4) ----
+  // A record is made at the press, filled in as the drag goes and written once
+  // when a drag that passed the 5 px threshold ends (release, Esc, page changed,
+  // switched off, or replaced by a new press). Nothing here runs or prints in the
+  // store build. No boxes are read during the drag: one read at the press, one
+  // at the end. It never throws into the drag: a failure is reported as
+  // "[Snap Linkit] drag line failed: ...".
+  let dragDiag = null;
+  let dragDiagCount = 0;
+
+  function diagFailed(error) {
+    console.error(`[Snap Linkit] drag line failed: ${error && error.message ? error.message : String(error)}`);
+  }
+
+  // The tracking box an element stands for (the box, or its label), else null
+  function diagTrackedBox(el) {
+    if (el instanceof HTMLInputElement && isTrackedBox(el)) return el;
+    if (el.localName === 'label' && el.control && isTrackedBox(el.control)) return el.control;
+    return null;
+  }
+
+  // An element's name in the line: the Fandom row name, else "tag.firstclass"
+  // (never link text, URLs or other IDs: decision Q8 and its brief 4 exception)
+  function diagName(el) {
+    if (!isElementNode(el)) return null;
+    const box = diagTrackedBox(el);
+    if (box) return box.getAttribute('data-tpt-row-id');
+    // Snap Linkit's own classes (snaplinkit-highlighted, ...) are not the page's
+    const cls = (el.getAttribute('class') || '').trim().split(/\s+/).find((c) => c && !c.startsWith('snaplinkit-'));
+    return el.localName + (cls ? '.' + cls : '');
+  }
+
+  // The pressed row. A press elsewhere in a tracking cell (its wrapper or
+  // padding) is named after the cell's box. Diagnostic only: the anchor stays
+  // the element pressed (changing that is brief 6).
+  function diagPressedName(el) {
+    if (!isElementNode(el) || diagTrackedBox(el) || typeof el.closest !== 'function') return diagName(el);
+    const cell = el.closest('td');
+    const box = cell ? Array.from(cell.querySelectorAll(TRACKED_CHECKBOX_SELECTOR)).find(isTrackedBox) : null;
+    return box ? box.getAttribute('data-tpt-row-id') : diagName(el);
+  }
+
+  function diagPlace(rec, el, clientY) {
+    const r = el.getBoundingClientRect();
+    rec.el = el;
+    rec.pressPageY = r.top + window.scrollY;
+    rec.offY = clientY - r.top;
+  }
+
+  // At the press, before the anchor is chosen. The record starts as "off:threw"
+  // and diagPick overwrites that when pickDragAnchor returns, so a throw inside
+  // it leaves exactly that (there is no try/catch around pickDragAnchor).
+  function diagPress(e) {
+    try {
+      if (dragDiag && dragDiag.started) diagWrite('replaced');
+      const el = isElementNode(e.target) ? e.target : null;
+      dragDiag = { started: false, protection: 'off:' + DRAG_OFF_REASONS.threw, anchor: 'none', key: 'none',
+        refinds: 0, refindCancelled: false, el: null, pressed: el ? diagPressedName(el) : null, pressPageY: null,
+        offY: null, updates: 0, slowest: 0, scrollPause: 0, lastScrollUpdate: null, lastStartPageY: null };
+      if (el) diagPlace(dragDiag, el, e.clientY);
+    } catch (error) {
+      dragDiag = null;
+      diagFailed(error);
+    }
+  }
+
+  // pickDragAnchor's result, passed through unchanged. In test builds the drag
+  // record notes which return it was.
+  function diagPick(anchor, offReason, el, e) {
+    if (SAVE_LOG && dragDiag) {
+      try {
+        const rec = dragDiag;
+        rec.protection = anchor ? 'on' : 'off:' + offReason;
+        rec.anchor = !anchor ? 'none' : anchor.el.localName === 'label' ? 'label'
+          : anchor.el instanceof HTMLAnchorElement ? 'link' : 'element';
+        const keys = { tracked: 'row', id: 'id', link: 'link' };
+        if (anchor && anchor.key && !(anchor.key.kind in keys)) throw new Error(`unknown key kind "${anchor.key.kind}"`);
+        rec.key = anchor && anchor.key ? keys[anchor.key.kind] : 'none';
+        if (isElementNode(el)) {
+          rec.pressed = diagPressedName(el);
+          diagPlace(rec, el, e.clientY);
+        }
+      } catch (error) {
+        dragDiag = null;
+        diagFailed(error);
+      }
+    }
+    return anchor;
+  }
+
+  function diagUpdated(t0) {
+    dragDiag.updates++;
+    dragDiag.slowest = Math.max(dragDiag.slowest, performance.now() - t0);
+  }
+
+  // Auto-scroll updates only: the longest wait between two in a row
+  function diagScrollUpdate() {
+    const now = performance.now();
+    if (dragDiag.lastScrollUpdate !== null) dragDiag.scrollPause = Math.max(dragDiag.scrollPause, now - dragDiag.lastScrollUpdate);
+    dragDiag.lastScrollUpdate = now;
+  }
+
+  // Write the drag's line, once. `end`: release, esc, page-changed,
+  // switched-off or replaced.
+  function diagWrite(end) {
+    const rec = dragDiag;
+    dragDiag = null;
+    if (!rec) return;
+    try {
+      // The start's gap from the pressed point, in page coordinates: the
+      // pressed element (or the element brief 3 found again) now
+      const a = state.anchor;
+      const ref = a ? a.el : rec.el;
+      const offY = a ? a.offY : rec.offY;
+      let moved = null;
+      let gap = null;
+      if (isElementNode(ref) && ref.isConnected && rec.pressPageY !== null && offY !== null) {
+        const r = ref.getBoundingClientRect();
+        if (r.width > 0 || r.height > 0) {
+          const nowPageY = r.top + window.scrollY;
+          moved = nowPageY - rec.pressPageY;
+          if (rec.lastStartPageY !== null) gap = rec.lastStartPageY - (nowPageY + offY);
+        }
+      }
+      const sel = inPageOrder(Array.from(state.selectedElements));
+      let boxes = 0;
+      let links = 0;
+      for (const el of sel) {
+        if (el instanceof HTMLAnchorElement) links++;
+        else if (el.type === 'checkbox' || el.getAttribute('role') === 'checkbox') boxes++;
+      }
+      dragDiagCount++;
+      console.log(dragDiagLine({
+        n: dragDiagCount, end, protection: rec.protection, anchor: rec.anchor, key: rec.key,
+        refind: rec.refindCancelled ? 'cancelled' : rec.refinds > 0 ? `found:${rec.refinds}` : 'none',
+        pressed: rec.pressed, moved, gap, selected: sel.length, boxes, links,
+        first: sel.length ? diagName(sel[0]) : null, last: sel.length ? diagName(sel[sel.length - 1]) : null,
+        updates: rec.updates, slowest: rec.slowest, scrollPause: rec.scrollPause,
+      }));
+    } catch (error) {
+      diagFailed(error);
+    }
   }
 
   function getUniqueUrls() {
@@ -1355,11 +1505,13 @@
   // ============================================
 
   function updateSelection() {
+    const t0 = SAVE_LOG ? performance.now() : 0;
     proxyCache = new Map();
     try {
       applySelection();
     } finally {
       proxyCache = null;
+      if (SAVE_LOG && dragDiag) diagUpdated(t0); // test builds: the drag line's updates and slowest
     }
   }
 
@@ -1420,7 +1572,9 @@
   }
 
   // Abort any in-progress drag, drop the selection and close the menu
-  function cancelSelection() {
+  // `end` says why, for the test-build drag line: esc, page-changed or switched-off
+  function cancelSelection(end) {
+    if (SAVE_LOG && dragDiag && dragDiag.started) diagWrite(end);
     state.isSelecting = false;
     state.isDragging = false;
     state.anchor = null;
@@ -1468,8 +1622,11 @@
         // NO mutation of state.startX/startY - getSelectionRect() follows the
         // pressed element (or the scroll delta when there is no anchor)
         if (!refreshDragAnchor()) return;
+        if (SAVE_LOG && dragDiag) diagScrollUpdate();
         updateLasso();
         updateSelection();
+      } else if (SAVE_LOG && dragDiag) {
+        dragDiag.lastScrollUpdate = null; // the pointer left the edge strip: the next stretch starts fresh
       }
     }, FRAME_INTERVAL);
   }
@@ -1516,6 +1673,7 @@
     state.startY = e.clientY;
     state.startScrollX = window.scrollX;
     state.startScrollY = window.scrollY;
+    if (SAVE_LOG) diagPress(e); // test builds: the drag line's record ("off:threw" until pickDragAnchor returns)
     state.anchor = pickDragAnchor(e);
     state.currentX = e.clientX;
     state.currentY = e.clientY;
@@ -1545,6 +1703,7 @@
 
       // Threshold reached - NOW activate selection mode
       state.isDragging = true;
+      if (SAVE_LOG && dragDiag) dragDiag.started = true; // test builds: this drag gets a line
       state.blockNextContextMenu = true; // Block context menu since we're dragging
 
       // Modifier drags build on the existing selection; a plain drag starts fresh
@@ -1581,6 +1740,7 @@
     if (e.button !== 2) return; // Right-click release
 
     const wasDragging = state.isDragging;
+    if (SAVE_LOG && wasDragging && dragDiag && dragDiag.started) diagWrite('release');
     state.isSelecting = false;
     state.isDragging = false;
     state.anchor = null;
@@ -1680,12 +1840,12 @@
       // save already in flight is waited for and reported)
       if (carefulRun) {
         carefulRun.stop = true;
-        cancelSelection();
+        cancelSelection('esc');
         return;
       }
       // Otherwise it closes a "Stopped" message that is still showing
       dismissStickyToast();
-      cancelSelection();
+      cancelSelection('esc');
     }
   }
 

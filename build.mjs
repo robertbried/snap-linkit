@@ -7,8 +7,9 @@
  *   node build.mjs chrome     -> dist/chrome (src/ with the files in chrome/ added or replacing)
  *   node build.mjs --test [firefox|chrome]
  *                             -> dist/test/<target> and dist/test/snap_linkit-<target>-<version>-test.zip: the same
- *                                files, except that content.js logs one console line per Fandom checkbox save
- *                                (SAVE_LOG on). For test builds only; never for a store upload.
+ *                                files, except that content.js writes test-build console lines: one per Fandom
+ *                                checkbox save and one per drag (SAVE_LOG on). For test builds only; never for a
+ *                                store upload.
  *   node build.mjs --faults [firefox|chrome]
  *                             -> dist/lab/<target> and dist/lab/snap_linkit-<target>-<version>-lab.zip: the test build
  *                                plus failure injection (FAULTS on: the page can make named steps fail through

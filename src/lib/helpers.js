@@ -180,6 +180,60 @@
     return 'The page changed under the drag; drag again.';
   }
 
+  // ---- Test builds only: one diagnostic console line per drag (brief 4) ----
+  // Why a drag's protection (brief 3's anchor) was off. One list, shared with
+  // the code that decides it, so later briefs reuse the same names.
+  const DRAG_OFF_REASONS = Object.freeze({
+    fixedOrSticky: 'fixed-or-sticky', // the pressed element is inside a fixed or sticky element
+    noBox: 'no-box',                  // the pressed element has a 0x0 box
+    noElement: 'no-element',          // no element under the pointer
+    threw: 'threw',                   // choosing the anchor threw (the drag went on without one)
+  });
+  // How a drag ended
+  const DRAG_ENDS = Object.freeze(['release', 'esc', 'page-changed', 'switched-off', 'replaced']);
+  const DRAG_ANCHOR_KINDS = Object.freeze(['label', 'link', 'element', 'none']);
+  const DRAG_KEY_KINDS = Object.freeze(['row', 'id', 'link', 'none']);
+
+  // A name in the line: quoted, " becomes ', whitespace collapsed, cut at 40 characters with an ellipsis.
+  // Only a Fandom row name or "tag.firstclass" is ever passed in (never link text, URLs or other IDs).
+  function dragDiagName(s) {
+    if (s === null || s === undefined) return '""';
+    let v = String(s).replace(/"/g, "'").replace(/\s+/g, ' ').trim();
+    if (v.length > 40) v = v.slice(0, 40) + '\u2026';
+    return `"${v}"`;
+  }
+
+  // Signed whole CSS px ("+350px", "-350px", "0px"), or "n/a" when unknown
+  function dragDiagPx(v) {
+    if (v === null || v === undefined || !Number.isFinite(v)) return 'n/a';
+    const r = Math.round(v);
+    return r > 0 ? `+${r}px` : r < 0 ? `${r}px` : '0px';
+  }
+
+  // The drag line. Throws on a value outside the documented sets (the caller
+  // reports that as "drag line failed"; it never reaches the drag itself).
+  //   r = { n, end, protection, anchor, key, refind, pressed, moved, gap,
+  //         selected, boxes, links, first, last, updates, slowest, scrollPause }
+  function dragDiagLine(r) {
+    const fail = (what) => { throw new Error(`dragDiagLine: bad ${what}`); };
+    const count = (v) => Number.isInteger(v) && v >= 0;
+    const ms = (v) => Number.isFinite(v) && v >= 0;
+    if (!Number.isInteger(r.n) || r.n < 1) fail('n');
+    if (!DRAG_ENDS.includes(r.end)) fail('end');
+    const offs = Object.values(DRAG_OFF_REASONS);
+    if (r.protection !== 'on' && !(typeof r.protection === 'string' && r.protection.startsWith('off:') &&
+        offs.includes(r.protection.slice(4)))) fail('protection');
+    if (!DRAG_ANCHOR_KINDS.includes(r.anchor)) fail('anchor');
+    if (!DRAG_KEY_KINDS.includes(r.key)) fail('key');
+    if (!(r.refind === 'none' || r.refind === 'cancelled' || /^found:[1-9][0-9]*$/.test(String(r.refind)))) fail('refind');
+    for (const k of ['selected', 'boxes', 'links', 'updates']) if (!count(r[k])) fail(k);
+    for (const k of ['slowest', 'scrollPause']) if (!ms(r[k])) fail(k);
+    return `[Snap Linkit] drag ${r.n}: end=${r.end} protection=${r.protection} anchor=${r.anchor} key=${r.key} ` +
+      `refind=${r.refind} pressed=${dragDiagName(r.pressed)} moved=${dragDiagPx(r.moved)} gap=${dragDiagPx(r.gap)} ` +
+      `selected=${r.selected} boxes=${r.boxes} links=${r.links} first=${dragDiagName(r.first)} last=${dragDiagName(r.last)} ` +
+      `updates=${r.updates} slowest=${Math.round(r.slowest)}ms scrollPause=${Math.round(r.scrollPause)}ms`;
+  }
+
   // Links that the "Download N Files" action offers (by URL suffix)
   const DOWNLOAD_EXTENSIONS = /\.(pdf|zip|rar|7z|tar|gz|doc|docx|xls|xlsx|ppt|pptx|mp3|mp4|avi|mov|jpg|jpeg|png|gif|svg)$/i;
   function isDownloadableUrl(url) {
@@ -537,6 +591,11 @@
     dragStartPoint,
     uniqueMatch,
     dragPageChangedMessage,
+    DRAG_OFF_REASONS,
+    DRAG_ENDS,
+    dragDiagName,
+    dragDiagPx,
+    dragDiagLine,
     DOWNLOAD_EXTENSIONS,
     isDownloadableUrl,
     majorityShouldCheck,
