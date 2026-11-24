@@ -243,7 +243,9 @@
   // The drag line. Throws on a value outside the documented sets (the caller
   // reports that as "drag line failed"; it never reaches the drag itself).
   //   r = { n, end, protection, anchor, key, refind, pressed, moved, gap,
-  //         selected, boxes, links, first, last, updates, slowest, scrollPause }
+  //         selected, boxes, links, first, last, updates, slowest, scrollPause,
+  //         rebuilds }   rebuilds (brief 7): times the drag's element cache was
+  //                      rebuilt after a page change (0 = the page didn't change)
   function dragDiagLine(r) {
     const fail = (what) => { throw new Error(`dragDiagLine: bad ${what}`); };
     const count = (v) => Number.isInteger(v) && v >= 0;
@@ -256,12 +258,78 @@
     if (!DRAG_ANCHOR_KINDS.includes(r.anchor)) fail('anchor');
     if (!DRAG_KEY_KINDS.includes(r.key)) fail('key');
     if (!(r.refind === 'none' || r.refind === 'cancelled' || /^found:[1-9][0-9]*$/.test(String(r.refind)))) fail('refind');
-    for (const k of ['selected', 'boxes', 'links', 'updates']) if (!count(r[k])) fail(k);
+    for (const k of ['selected', 'boxes', 'links', 'updates', 'rebuilds']) if (!count(r[k])) fail(k);
     for (const k of ['slowest', 'scrollPause']) if (!ms(r[k])) fail(k);
     return `[Snap Linkit] drag ${r.n}: end=${r.end} protection=${r.protection} anchor=${r.anchor} key=${r.key} ` +
       `refind=${r.refind} pressed=${dragDiagName(r.pressed)} moved=${dragDiagPx(r.moved)} gap=${dragDiagPx(r.gap)} ` +
       `selected=${r.selected} boxes=${r.boxes} links=${r.links} first=${dragDiagName(r.first)} last=${dragDiagName(r.last)} ` +
-      `updates=${r.updates} slowest=${Math.round(r.slowest)}ms scrollPause=${Math.round(r.scrollPause)}ms`;
+      `updates=${r.updates} slowest=${Math.round(r.slowest)}ms scrollPause=${Math.round(r.scrollPause)}ms rebuilds=${r.rebuilds}`;
+  }
+
+  // ---- Brief 7: the drag's element cache (pure parts) ----
+
+  // Is this element selectable? Today's rules, as plain facts so they're
+  // testable without a DOM (the content script reads the facts):
+  //   { hidden, hasProxyLabels, isSvgLink, isLink, rawHref, openable }
+  // hidden: isStyleHidden of its computed style; hasProxyLabels: a hidden
+  // checkbox shows through a visible label (read only when hidden); isSvgLink:
+  // an SVG <a> (its href can't be acted on); rawHref / openable: a link's href
+  // attribute and isOpenableUrl of its resolved href.
+  function selectableVerdict(f) {
+    if (f.hidden) return f.hasProxyLabels === true;
+    if (f.isSvgLink) return false;
+    if (f.isLink) {
+      const raw = String(f.rawHref || '').trim();
+      if (!raw || raw.startsWith('#')) return false; // same-page fragment links
+      if (!f.openable) return false;
+    }
+    return true;
+  }
+
+  // Each control's labels, from [label, control] pairs in document order (the
+  // inverse of label.control, which is what control.labels returns, per the
+  // HTML spec). One pass over the page's labels instead of one document search
+  // per checkbox.
+  function labelMapFrom(pairs) {
+    const map = new Map();
+    for (const [label, control] of pairs) {
+      if (!control) continue;
+      if (!map.has(control)) map.set(control, []);
+      map.get(control).push(label);
+    }
+    return map;
+  }
+
+  // Does an element touch the selection box: its own box, or (for a checkbox)
+  // one of its labels' boxes? Everything selected touches it, so only these
+  // elements need the full selectable check. labelRects() is called only when
+  // the own box doesn't touch.
+  function touchesSelection(selRect, ownRect, labelRects) {
+    if (rectsIntersect(selRect, ownRect)) return true;
+    return labelRects().some((r) => rectsIntersect(selRect, r));
+  }
+
+  // Do two class attribute values differ only in snaplinkit-* classes (Snap
+  // Linkit's own highlight and state classes)?
+  function onlyOwnClassChange(oldValue, newValue) {
+    const a = new Set(String(oldValue || '').split(/\s+/).filter(Boolean));
+    const b = new Set(String(newValue || '').split(/\s+/).filter(Boolean));
+    for (const x of a) if (!b.has(x) && !x.startsWith('snaplinkit-')) return false;
+    for (const x of b) if (!a.has(x) && !x.startsWith('snaplinkit-')) return false;
+    return true;
+  }
+
+  // Does a page change make the drag's element cache stale? Plain facts about
+  // one MutationRecord: { type, inUi, nodesAllUi, attributeName, oldValue,
+  // newValue }. inUi: the change is inside Snap Linkit's UI; nodesAllUi: every
+  // added and removed node is Snap Linkit's UI (the lasso, menu, toast or
+  // confirm). Snap Linkit's own changes never count; anything not understood
+  // does (a stale cache costs one rebuild, never a wrong selection).
+  function pageChangeMarksStale(r) {
+    if (r.inUi) return false;
+    if (r.type === 'childList') return r.nodesAllUi !== true;
+    if (r.type === 'attributes' && r.attributeName === 'class') return !onlyOwnClassChange(r.oldValue, r.newValue);
+    return true;
   }
 
   // Links that the "Download N Files" action offers (by URL suffix)
@@ -628,6 +696,11 @@
     dragDiagName,
     dragDiagPx,
     dragDiagLine,
+    selectableVerdict,
+    labelMapFrom,
+    touchesSelection,
+    onlyOwnClassChange,
+    pageChangeMarksStale,
     DOWNLOAD_EXTENSIONS,
     isDownloadableUrl,
     majorityShouldCheck,

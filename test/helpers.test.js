@@ -11,7 +11,7 @@ test('SnapLinkitLib exposes every helper and is frozen', () => {
     'carefulProgressMessage', 'carefulFallbackMessage', 'carefulNotStartedMessage', 'clampMenuAxis', 'faultMatches', 'dragModifierMode', 'filenameFromUrl', 'fitMenuAxis', 'formatDurationEstimate', 'formatShortcut',
     'isDownloadableUrl', 'isOpenableUrl', 'isStyleHidden', 'isTrackedCheckbox', 'isValidPattern', 'isVersionBefore', 'majorityShouldCheck',
     'matchesPattern', 'normalizeReleaseAction', 'ordinaryCheckboxMessage', 'ordinaryUnreadMessage', 'plural',
-    'proxyLabelIndexes', 'rectsIntersect', 'selectionRect', 'rectFromPoints', 'dragStartPoint', 'uniqueMatch', 'firstUsableAnchor', 'dragPageChangedMessage', 'dragStartFailedMessage', 'DRAG_OFF_REASONS', 'DRAG_ENDS', 'dragDiagName', 'dragDiagPx', 'dragDiagLine', 'shouldOfferWhatsNew', 'whatsNewLines', 'whatsNewRecord', 'whatsNewShowsShortcuts',
+    'proxyLabelIndexes', 'rectsIntersect', 'selectionRect', 'rectFromPoints', 'dragStartPoint', 'uniqueMatch', 'firstUsableAnchor', 'dragPageChangedMessage', 'dragStartFailedMessage', 'DRAG_OFF_REASONS', 'DRAG_ENDS', 'dragDiagName', 'dragDiagPx', 'dragDiagLine', 'selectableVerdict', 'labelMapFrom', 'touchesSelection', 'onlyOwnClassChange', 'pageChangeMarksStale', 'shouldOfferWhatsNew', 'whatsNewLines', 'whatsNewRecord', 'whatsNewShowsShortcuts',
   ].sort());
   assert.ok(Object.isFrozen(lib));
   assert.equal(globalThis.SnapLinkitLib, lib);
@@ -242,7 +242,7 @@ test('dragStartFailedMessage: the on-screen text Rob approved for a failed drag 
 const DIAG = {
   n: 1, end: 'release', protection: 'on', anchor: 'label', key: 'row', refind: 'none', pressed: 'Master Support (Legacy)',
   moved: 0, gap: 0, selected: 80, boxes: 80, links: 0, first: 'Master Support (Legacy)', last: 'Inspiring',
-  updates: 76, slowest: 212.4, scrollPause: 1810.2,
+  updates: 76, slowest: 212.4, scrollPause: 1810.2, rebuilds: 0,
 };
 const DIAG_RE = /^\[Snap Linkit\] drag (\d+): (.*)$/;
 const diagFields = (line) => Object.fromEntries([...DIAG_RE.exec(line)[2].matchAll(/(\w+)=("[^"]*"|\S+)/g)].map((m) => [m[1], m[2]]));
@@ -251,7 +251,7 @@ test('dragDiagLine: the exact line for a normal drag', () => {
   assert.equal(lib.dragDiagLine(DIAG),
     '[Snap Linkit] drag 1: end=release protection=on anchor=label key=row refind=none pressed="Master Support (Legacy)" ' +
     'moved=0px gap=0px selected=80 boxes=80 links=0 first="Master Support (Legacy)" last="Inspiring" ' +
-    'updates=76 slowest=212ms scrollPause=1810ms');
+    'updates=76 slowest=212ms scrollPause=1810ms rebuilds=0');
 });
 
 test('dragDiagLine: every end and every protection value', () => {
@@ -269,7 +269,7 @@ test('dragDiagLine: the exact line for a drag whose start failed (brief 5)', () 
   assert.equal(lib.dragDiagLine({ ...DIAG, end: 'start-failed', protection: 'off:threw', anchor: 'none', key: 'none', pressed: 'a',
     moved: 0, gap: null, selected: 0, boxes: 0, links: 0, first: null, last: null, updates: 0, slowest: 0, scrollPause: 0 }),
     '[Snap Linkit] drag 1: end=start-failed protection=off:threw anchor=none key=none refind=none pressed="a" ' +
-    'moved=0px gap=n/a selected=0 boxes=0 links=0 first="" last="" updates=0 slowest=0ms scrollPause=0ms');
+    'moved=0px gap=n/a selected=0 boxes=0 links=0 first="" last="" updates=0 slowest=0ms scrollPause=0ms rebuilds=0');
 });
 
 test('dragDiagLine: anchor, key and re-find values', () => {
@@ -308,6 +308,7 @@ test('dragDiagLine: values outside the documented sets throw (the caller reports
     { protection: 'on:' }, { protection: 'on:unknown' }, { protection: 'on:off:no-box' },
     { anchor: 'div' }, { key: 'tracked' }, { refind: 'found:0' }, { refind: 'found' }, { selected: -1 }, { boxes: 1.5 },
     { links: undefined }, { updates: null }, { slowest: -1 }, { scrollPause: NaN },
+    { rebuilds: -1 }, { rebuilds: 1.5 }, { rebuilds: undefined },
   ];
   for (const b of bad) assert.throws(() => lib.dragDiagLine({ ...DIAG, ...b }), /^Error: dragDiagLine: bad /, JSON.stringify(b));
 });
@@ -318,8 +319,77 @@ test('dragDiagLine: the agreed regex parses every field, in the fixed order', ()
   const m = DIAG_RE.exec(line);
   assert.equal(m[1], '12');
   assert.deepEqual(Object.keys(diagFields(line)), ['end', 'protection', 'anchor', 'key', 'refind', 'pressed', 'moved', 'gap',
-    'selected', 'boxes', 'links', 'first', 'last', 'updates', 'slowest', 'scrollPause']);
+    'selected', 'boxes', 'links', 'first', 'last', 'updates', 'slowest', 'scrollPause', 'rebuilds']);
   assert.equal(diagFields(line).pressed, '"Master \'Support\'"');
+});
+
+test('dragDiagLine: rebuilds, the last field (brief 7)', () => {
+  assert.equal(diagFields(lib.dragDiagLine({ ...DIAG, rebuilds: 0 })).rebuilds, '0');
+  assert.equal(diagFields(lib.dragDiagLine({ ...DIAG, rebuilds: 3 })).rebuilds, '3');
+  assert.match(lib.dragDiagLine({ ...DIAG, rebuilds: 2 }), / scrollPause=1810ms rebuilds=2$/);
+});
+
+// Brief 7: the drag's element cache (pure parts)
+const SEL = { hidden: false, hasProxyLabels: false, isSvgLink: false, isLink: false, rawHref: null, openable: false };
+
+test('selectableVerdict: today\'s rules for inputs, buttons and roles', () => {
+  assert.equal(lib.selectableVerdict(SEL), true);
+  assert.equal(lib.selectableVerdict({ ...SEL, hidden: true }), false);
+  assert.equal(lib.selectableVerdict({ ...SEL, hidden: true, hasProxyLabels: true }), true); // a hidden checkbox shown by its label
+});
+
+test('selectableVerdict: links (fragments, unopenable, SVG) as getSelectableElements did', () => {
+  const link = { ...SEL, isLink: true, rawHref: 'https://a.b/x', openable: true };
+  assert.equal(lib.selectableVerdict(link), true);
+  for (const rawHref of ['', '   ', '#top', '  #x', null]) assert.equal(lib.selectableVerdict({ ...link, rawHref }), false, String(rawHref));
+  assert.equal(lib.selectableVerdict({ ...link, openable: false }), false); // javascript:, mailto:, ...
+  assert.equal(lib.selectableVerdict({ ...SEL, isSvgLink: true }), false);
+  assert.equal(lib.selectableVerdict({ ...link, hidden: true }), false); // a hidden link: no label stands in for it
+});
+
+test('labelMapFrom: each control\'s labels in document order (the inverse of label.control)', () => {
+  const [a, b, l1, l2, l3, l4] = ['a', 'b', 'l1', 'l2', 'l3', 'l4'].map((n) => ({ n }));
+  const m = lib.labelMapFrom([[l1, a], [l2, null], [l3, b], [l4, a]]);
+  assert.deepEqual(m.get(a), [l1, l4]);
+  assert.deepEqual(m.get(b), [l3]);
+  assert.equal(m.size, 2); // a label without a control belongs to nothing
+  assert.equal(lib.labelMapFrom([]).size, 0);
+});
+
+test('touchesSelection: own box, else a label\'s box; the labels are read only when needed', () => {
+  const box = { left: 0, top: 0, right: 100, bottom: 100 };
+  const inside = { left: 10, top: 10, right: 20, bottom: 20 };
+  const outside = { left: 200, top: 200, right: 220, bottom: 220 };
+  let asked = 0;
+  const labels = (rects) => () => { asked++; return rects; };
+  assert.equal(lib.touchesSelection(box, inside, labels([outside])), true);
+  assert.equal(asked, 0); // the own box touches: labels not read
+  assert.equal(lib.touchesSelection(box, outside, labels([outside, inside])), true); // a 0x0 Fandom input, its label inside
+  assert.equal(lib.touchesSelection(box, outside, labels([outside])), false);
+  assert.equal(lib.touchesSelection(box, outside, labels([])), false);
+});
+
+test('onlyOwnClassChange: only snaplinkit-* classes changed', () => {
+  assert.equal(lib.onlyOwnClassChange('row', 'row snaplinkit-highlighted'), true);
+  assert.equal(lib.onlyOwnClassChange('snaplinkit-highlighted a', 'a'), true);
+  assert.equal(lib.onlyOwnClassChange(null, 'snaplinkit-selecting'), true);
+  assert.equal(lib.onlyOwnClassChange('row', 'row'), true);
+  assert.equal(lib.onlyOwnClassChange('row', 'row hidden'), false);
+  assert.equal(lib.onlyOwnClassChange('row is-saving', 'row snaplinkit-highlighted'), false);
+  assert.equal(lib.onlyOwnClassChange('', 'x'), false);
+});
+
+test('pageChangeMarksStale: page changes count, Snap Linkit\'s own never', () => {
+  const R = { type: 'childList', inUi: false, nodesAllUi: false, attributeName: null, oldValue: null, newValue: null };
+  assert.equal(lib.pageChangeMarksStale(R), true); // nodes added or removed by the page
+  assert.equal(lib.pageChangeMarksStale({ ...R, nodesAllUi: true }), false); // the lasso, menu, toast or confirm added to <body>
+  assert.equal(lib.pageChangeMarksStale({ ...R, inUi: true }), false); // inside Snap Linkit's UI
+  const A = { ...R, type: 'attributes' };
+  for (const attributeName of ['style', 'hidden', 'type', 'href', 'role']) assert.equal(lib.pageChangeMarksStale({ ...A, attributeName }), true, attributeName);
+  assert.equal(lib.pageChangeMarksStale({ ...A, attributeName: 'class', oldValue: 'a', newValue: 'a snaplinkit-highlighted' }), false);
+  assert.equal(lib.pageChangeMarksStale({ ...A, attributeName: 'class', oldValue: 'a', newValue: 'a collapsed' }), true);
+  assert.equal(lib.pageChangeMarksStale({ ...A, inUi: true, attributeName: 'style' }), false); // the lasso being drawn
+  assert.equal(lib.pageChangeMarksStale({}), true); // anything not understood counts (one rebuild, never a wrong selection)
 });
 
 test('isDownloadableUrl: known extensions at the end of the URL, case-insensitive', () => {

@@ -13,6 +13,7 @@
     isDownloadableUrl, majorityShouldCheck, plural, fitMenuAxis, clampMenuAxis,
     normalizeReleaseAction, dragModifierMode, isStyleHidden, proxyLabelIndexes,
     TRACKED_TABLE_SELECTOR, isTrackedCheckbox, afterClickOutcome, ordinaryCheckboxMessage,
+    selectableVerdict, labelMapFrom, touchesSelection, pageChangeMarksStale,
     carefulCheckboxMessage, carefulProgressMessage, carefulConfirmText,
     ordinaryUnreadMessage, carefulFallbackMessage, carefulNotStartedMessage, faultMatches
   } = globalThis.SnapLinkitLib;
@@ -190,36 +191,32 @@
   // UTILITY FUNCTIONS
   // ============================================
 
-  function getSelectableElements() {
-    const selectors = [
-      'a[href]',
-      'input[type="checkbox"]',
-      'input[type="radio"]',
-      'button',
-      '[role="button"]',
-      '[role="checkbox"]',
-      '[role="radio"]'
-    ];
+  // Everything a drag can select
+  const SELECTABLE_SELECTOR = [
+    'a[href]',
+    'input[type="checkbox"]',
+    'input[type="radio"]',
+    'button',
+    '[role="button"]',
+    '[role="checkbox"]',
+    '[role="radio"]'
+  ].join(', ');
 
-    return Array.from(document.querySelectorAll(selectors.join(', '))).filter(el => {
-      const style = window.getComputedStyle(el);
-      if (isStyleHidden(style)) {
-        // A hidden checkbox stays selectable through a visible label
-        return proxyLabels(el).length > 0;
-      }
-
-      // SVG <a> elements also match a[href] but carry an SVGAnimatedString href
-      // the rest of this script cannot act on; leave them out of the selection
-      if (el.localName === 'a' && !(el instanceof HTMLAnchorElement)) return false;
-
-      if (el instanceof HTMLAnchorElement) {
-        // Skip same-page fragment links, then anything the browser cannot open
-        const raw = (el.getAttribute('href') || '').trim();
-        if (!raw || raw.startsWith('#')) return false;
-        if (!isOpenableUrl(el.href)) return false;
-      }
-
-      return true;
+  // Is this element selectable? The one place the rules are applied (pure
+  // rules: selectableVerdict): a hidden element only when it is a checkbox
+  // showing through a visible label; no SVG links; no same-page fragment links
+  // or links the browser can't open. Used during a drag for elements that touch
+  // the selection box, and again at release.
+  function isSelectableElement(el) {
+    const hidden = isStyleHidden(window.getComputedStyle(el));
+    const isLink = el instanceof HTMLAnchorElement;
+    return selectableVerdict({
+      hidden,
+      hasProxyLabels: hidden ? proxyLabels(el).length > 0 : false,
+      isSvgLink: el.localName === 'a' && !isLink,
+      isLink,
+      rawHref: isLink ? el.getAttribute('href') : null,
+      openable: isLink ? isOpenableUrl(el.href) : false,
     });
   }
 
@@ -229,9 +226,10 @@
   // drive CSS-only tabs and star ratings. So is a hidden checkbox that declares
   // another role, such as MediaWiki's table-of-contents toggle (role="button").
   // [] for every other element.
-  // Within one selection update every element is asked up to three times
-  // (filter, hit test, highlight) and each answer reads computed styles and
-  // boxes, so updateSelection() shares one cache for the whole update.
+  // During a drag every element is asked several times (check, hit test,
+  // highlight) and each answer reads computed styles and boxes, so the answers
+  // are kept for the drag (brief 7: dragCache.proxies, cleared when the page
+  // changes).
   let proxyCache = null;
   function proxyLabels(el) {
     if (proxyCache && proxyCache.has(el)) return proxyCache.get(el);
@@ -244,7 +242,7 @@
     if (!(el instanceof HTMLInputElement) || el.type !== 'checkbox') return [];
     const role = el.getAttribute('role');
     if (role && role !== 'checkbox' && role !== 'switch') return [];
-    const labels = Array.from(el.labels || []);
+    const labels = labelsOf(el);
     if (labels.length === 0) return [];
     const stateOf = node => ({
       hidden: isStyleHidden(window.getComputedStyle(node)),
@@ -280,6 +278,65 @@
     );
     if (SAVE_LOG && dragDiag) dragDiag.lastStartPageY = start.y + scroll.y; // test builds: the drag line's gap
     return rectFromPoints(start, { x: state.currentX, y: state.currentY });
+  }
+
+  // ---- The drag's element cache (brief 7) ----
+  // Re-checking every link and input on every update made long drags slow on
+  // big pages (item 16). Per drag, the candidates are found once, each one's
+  // selectable verdict is worked out only when it first touches the selection
+  // box, and labels come from one map. Boxes are still read on every update, so
+  // layout shifts are followed. Any page change (nodes added or removed; class,
+  // style, hidden, type, href or role changed) or a resize marks the cache
+  // stale and the next update rebuilds it; Snap Linkit's own changes don't
+  // count. Released when the drag ends, however it ends.
+  const UI_SELECTOR = '.snaplinkit-lasso, .snaplinkit-menu, .snaplinkit-toast, .snaplinkit-confirm-overlay, .snaplinkit-confirm';
+  let dragCache = null; // { list, verdicts, proxies, labelMap, stale, rebuilds, observer, onResize }
+
+  function isOwnUi(node) {
+    const el = node && node.nodeType === 1 ? node : node && node.parentElement;
+    return !!el && typeof el.closest === 'function' && !!el.closest(UI_SELECTOR);
+  }
+
+  function startDragCache() {
+    endDragCache();
+    const c = { list: null, verdicts: new Map(), proxies: new Map(), labelMap: null, stale: false, rebuilds: 0, observer: null, onResize: null };
+    c.observer = new MutationObserver((records) => {
+      if (c.stale) return;
+      for (const r of records) {
+        const nodes = [...(r.addedNodes || []), ...(r.removedNodes || [])];
+        const facts = {
+          type: r.type, attributeName: r.attributeName, oldValue: r.oldValue,
+          newValue: r.type === 'attributes' && r.target && typeof r.target.getAttribute === 'function' ? r.target.getAttribute(r.attributeName) : null,
+          inUi: isOwnUi(r.target),
+          nodesAllUi: nodes.length > 0 && nodes.every(isOwnUi),
+        };
+        if (pageChangeMarksStale(facts)) { c.stale = true; return; }
+      }
+    });
+    c.observer.observe(document.documentElement, {
+      childList: true, subtree: true, attributes: true, attributeOldValue: true,
+      attributeFilter: ['class', 'style', 'hidden', 'type', 'href', 'role'],
+    });
+    c.onResize = () => { c.stale = true; };
+    window.addEventListener('resize', c.onResize);
+    dragCache = c;
+  }
+
+  function endDragCache() {
+    if (!dragCache) return;
+    dragCache.observer.disconnect();
+    window.removeEventListener('resize', dragCache.onResize);
+    dragCache = null;
+  }
+
+  // An element's labels: from the drag's label map (one pass over the page's
+  // labels), else the browser's own lookup
+  function labelsOf(el) {
+    if (!dragCache) return Array.from(el.labels || []);
+    if (!dragCache.labelMap) {
+      dragCache.labelMap = labelMapFrom(Array.from(document.querySelectorAll('label'), (l) => [l, l.control]));
+    }
+    return dragCache.labelMap.get(el) || [];
   }
 
   // ---- The drag's anchor (brief 3) ----
@@ -562,6 +619,7 @@
         pressed: rec.pressed, moved, gap, selected: sel.length, boxes, links,
         first: sel.length ? diagName(sel[0]) : null, last: sel.length ? diagName(sel[sel.length - 1]) : null,
         updates: rec.updates, slowest: rec.slowest, scrollPause: rec.scrollPause,
+        rebuilds: dragCache ? dragCache.rebuilds : 0,
       }));
     } catch (error) {
       diagFailed(error);
@@ -1549,7 +1607,16 @@
 
   function updateSelection() {
     const t0 = SAVE_LOG ? performance.now() : 0;
-    proxyCache = new Map();
+    if (!dragCache) startDragCache(); // started at the 5 px threshold; on demand otherwise
+    if (dragCache.stale) {
+      if (dragCache.list) dragCache.rebuilds++;
+      dragCache.list = null;
+      dragCache.verdicts = new Map();
+      dragCache.proxies = new Map();
+      dragCache.labelMap = null;
+      dragCache.stale = false;
+    }
+    proxyCache = dragCache.proxies;
     try {
       applySelection();
     } finally {
@@ -1560,17 +1627,25 @@
 
   function applySelection() {
     const selRect = getSelectionRect();
-    const elements = getSelectableElements();
+    const c = dragCache;
+    if (!c.list) c.list = Array.from(document.querySelectorAll(SELECTABLE_SELECTOR));
 
     const currentlyInLasso = new Set();
 
-    elements.forEach(el => {
+    for (const el of c.list) {
+      // Boxes first: only an element that touches the selection box (itself, or
+      // a checkbox through one of its labels) needs the full check, kept for the
+      // drag
+      const labelRects = () => (el instanceof HTMLInputElement && el.type === 'checkbox' ? labelsOf(el).map(getElementRect) : []);
+      if (!touchesSelection(selRect, getElementRect(el), labelRects)) continue;
+      if (!c.verdicts.has(el)) c.verdicts.set(el, isSelectableElement(el));
+      if (!c.verdicts.get(el)) continue;
       const proxies = proxyLabels(el);
       const rects = proxies.length > 0 ? proxies.map(getElementRect) : [getElementRect(el)];
       if (rects.some(r => rectsIntersect(selRect, r))) {
         currentlyInLasso.add(el);
       }
-    });
+    }
 
     // Apply modifier logic
     if (state.modifierMode === 'add') {
@@ -1602,6 +1677,26 @@
     });
   }
 
+  // At release (brief 7): the selection was built with verdicts kept for the
+  // drag, so check each selected element again with the full rules, fresh, and
+  // drop any that no longer qualify (and its highlight). Nothing hidden at
+  // release is acted on. A menu left open afterwards isn't re-checked at click
+  // time, as before.
+  function recheckSelectionAtRelease() {
+    if (dragCache) { dragCache.proxies = new Map(); dragCache.labelMap = null; }
+    proxyCache = dragCache ? dragCache.proxies : null;
+    try {
+      for (const el of Array.from(state.selectedElements)) {
+        if (isSelectableElement(el)) continue;
+        state.selectedElements.delete(el);
+        el.classList.remove('snaplinkit-highlighted');
+        labelsOf(el).forEach((l) => l.classList.remove('snaplinkit-highlighted'));
+      }
+    } finally {
+      proxyCache = null;
+    }
+  }
+
   // Every path that acts on or drops the selection ends here, so the menu
   // closes with it: a menu left open would still hold the old link list and
   // act on it again (e.g. after Alt+Shift+Comma or Ctrl+C).
@@ -1618,6 +1713,7 @@
   // `end` says why, for the test-build drag line: esc, page-changed, switched-off or start-failed
   function cancelSelection(end) {
     if (SAVE_LOG && dragDiag && dragDiag.started) diagWrite(end);
+    endDragCache();
     state.isSelecting = false;
     state.isDragging = false;
     state.anchor = null;
@@ -1714,6 +1810,7 @@
     // failure is reported in the console and marks the press: if it becomes a
     // drag, onMouseMove cancels it and says so; a plain right-click stays one.
     if (SAVE_LOG) diagPress(e); // test builds: the drag line's record ("off:threw" until pickDragAnchor returns)
+    endDragCache(); // a press with no release in between ends the previous drag's cache (after its line)
     let anchor = null;
     let pressFailed = false;
     try {
@@ -1777,6 +1874,8 @@
         return;
       }
 
+      startDragCache(); // brief 7: candidates and verdicts for this drag
+
       // Modifier drags build on the existing selection; a plain drag starts fresh
       if (state.modifierMode) {
         state.persistentSelection = new Set(state.selectedElements);
@@ -1811,7 +1910,9 @@
     if (e.button !== 2) return; // Right-click release
 
     const wasDragging = state.isDragging;
+    if (wasDragging) recheckSelectionAtRelease(); // before the line, so selected= is what's acted on
     if (SAVE_LOG && wasDragging && dragDiag && dragDiag.started) diagWrite('release');
+    endDragCache();
     state.isSelecting = false;
     state.isDragging = false;
     state.anchor = null;
