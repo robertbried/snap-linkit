@@ -155,11 +155,13 @@
   //   rect    the pressed element's box now (null only when there is no anchor)
   //   scroll  { x, y }                 page scroll now
   //   start   { x, y, scrollX, scrollY } pointer and page scroll at the press
-  // With an anchor, the start moves with the pressed element, so content above
-  // it that changes height mid-drag can't move it. Without one (a press in a
-  // fixed or sticky element, or on a 0x0 box), the start is the press point
-  // moved by the scroll since, as before brief 3. An anchor without a box is a
-  // caller error: the content script finds the element again or cancels first.
+  // With an anchor, the start moves with the pressed element (or, since brief
+  // 5b, the element found under the press point when the pressed one is fixed,
+  // sticky or 0x0), so content above it that changes height mid-drag can't move
+  // it. Without one (nothing usable under the point but <html>/<body>, or no
+  // element at all), the start is the press point moved by the scroll since, as
+  // before brief 3. An anchor without a box is a caller error: the content
+  // script finds the element again or cancels first.
   function dragStartPoint(anchor, rect, scroll, start) {
     if (!anchor) {
       return { x: start.x - (scroll.x - start.scrollX), y: start.y - (scroll.y - start.scrollY) };
@@ -172,6 +174,24 @@
   // pressed element again: only an unambiguous match counts).
   function uniqueMatch(list) {
     return list && list.length === 1 ? list[0] : null;
+  }
+
+  // Brief 5b: the anchor for a press whose own element can't be one (inside a
+  // fixed or sticky element, or 0x0). Candidates come in order (the element
+  // pressed, then everything under the press point, top to bottom); for each,
+  // its mapped element (tracking label or link) is tried first, then the
+  // candidate itself. The first usable one wins. The chain stops at the first
+  // stop candidate (<html> or <body>, which would protect nothing): null, and the
+  // caller keeps the old maths. `candidates` may be lazy; nothing after the
+  // winner is read.
+  function firstUsableAnchor(candidates, { isStop, map, usable }) {
+    for (const c of candidates) {
+      if (isStop(c)) return null;
+      const m = map(c);
+      if (usable(m)) return m;
+      if (m !== c && usable(c)) return c;
+    }
+    return null;
   }
 
   // Shown (until clicked) when the pressed element left the page mid-drag and
@@ -190,10 +210,13 @@
   // ---- Test builds only: one diagnostic console line per drag (brief 4) ----
   // Why a drag's protection (brief 3's anchor) was off. One list, shared with
   // the code that decides it, so later briefs reuse the same names.
+  // "off:<reason>": no anchor. "on:<reason>" (brief 5b): the pressed element
+  // couldn't be the anchor for that reason, and one was found under the press
+  // point instead.
   const DRAG_OFF_REASONS = Object.freeze({
-    fixedOrSticky: 'fixed-or-sticky', // the pressed element is inside a fixed or sticky element
-    noBox: 'no-box',                  // the pressed element has a 0x0 box
-    noElement: 'no-element',          // no element under the pointer
+    fixedOrSticky: 'fixed-or-sticky', // the pressed element is inside a fixed or sticky element (off: nothing usable under it either)
+    noBox: 'no-box',                  // the pressed element has a 0x0 box (off: nothing usable under it either)
+    noElement: 'no-element',          // no element under the pointer (unreachable from real input; the smoke harness takes it)
     threw: 'threw',                   // choosing the anchor threw (a drag from that press is cancelled: end=start-failed)
   });
   // How a drag ended (start-failed: the anchor couldn't be chosen at the press, brief 5)
@@ -228,8 +251,8 @@
     if (!Number.isInteger(r.n) || r.n < 1) fail('n');
     if (!DRAG_ENDS.includes(r.end)) fail('end');
     const offs = Object.values(DRAG_OFF_REASONS);
-    if (r.protection !== 'on' && !(typeof r.protection === 'string' && r.protection.startsWith('off:') &&
-        offs.includes(r.protection.slice(4)))) fail('protection');
+    const reasoned = (p, prefix) => typeof p === 'string' && p.startsWith(prefix) && offs.includes(p.slice(prefix.length));
+    if (r.protection !== 'on' && !reasoned(r.protection, 'off:') && !reasoned(r.protection, 'on:')) fail('protection');
     if (!DRAG_ANCHOR_KINDS.includes(r.anchor)) fail('anchor');
     if (!DRAG_KEY_KINDS.includes(r.key)) fail('key');
     if (!(r.refind === 'none' || r.refind === 'cancelled' || /^found:[1-9][0-9]*$/.test(String(r.refind)))) fail('refind');
@@ -597,6 +620,7 @@
     rectFromPoints,
     dragStartPoint,
     uniqueMatch,
+    firstUsableAnchor,
     dragPageChangedMessage,
     dragStartFailedMessage,
     DRAG_OFF_REASONS,

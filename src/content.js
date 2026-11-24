@@ -9,7 +9,7 @@
   // Pure helpers live in lib/helpers.js (loaded first by the manifest)
   const {
     isOpenableUrl, matchesPattern, rectsIntersect, rectFromPoints, dragStartPoint,
-    uniqueMatch, dragPageChangedMessage, dragStartFailedMessage, DRAG_OFF_REASONS, dragDiagLine, TRACKED_CHECKBOX_SELECTOR,
+    uniqueMatch, firstUsableAnchor, dragPageChangedMessage, dragStartFailedMessage, DRAG_OFF_REASONS, dragDiagLine, TRACKED_CHECKBOX_SELECTOR,
     isDownloadableUrl, majorityShouldCheck, plural, fitMenuAxis, clampMenuAxis,
     normalizeReleaseAction, dragModifierMode, isStyleHidden, proxyLabelIndexes,
     TRACKED_TABLE_SELECTOR, isTrackedCheckbox, afterClickOutcome, ordinaryCheckboxMessage,
@@ -298,7 +298,7 @@
 
   // Inside a position: fixed or sticky element (crossing shadow roots)? Such an
   // element stays put while the page scrolls, so a start tied to it would move
-  // with the window: those drags keep the old maths.
+  // with the window: the anchor is looked for under it instead (brief 5b).
   function inFixedOrSticky(el) {
     for (let n = el; isElementNode(n); n = n.parentElement || (typeof n.getRootNode === 'function' && n.getRootNode().host) || null) {
       const pos = window.getComputedStyle(n).position;
@@ -341,26 +341,66 @@
     return found && anchorBox(found) ? found : null;
   }
 
-  // At the press: the element under the pointer (the real one inside a shadow
-  // root), or the tracking label / link it sits in, and the pointer's offset
-  // inside it. null keeps the old maths (fixed or sticky, or no box).
+  // The element a drag is tied to for an element pressed (or found under the
+  // press point): its Fandom tracking label, else the link it sits in, else the
+  // element itself. The one place this mapping lives (brief 6 adds its step here).
+  function mapToAnchorElement(el) {
+    const label = el.closest('label');
+    if (label && label.control && isTrackedBox(label.control)) return label;
+    return el.closest('a[href]') || el;
+  }
+
+  // Every element under a point, top to bottom, including those inside open
+  // shadow roots: document.elementsFromPoint only gives a shadow root's host,
+  // so each open root is asked too and its elements go just before the host.
+  // Closed roots stay their host.
+  function elementsUnderPoint(x, y) {
+    const out = [];
+    const walk = (root) => {
+      if (typeof root.elementsFromPoint !== 'function') return;
+      for (const n of root.elementsFromPoint(x, y)) {
+        if (out.includes(n)) continue;
+        if (root !== document && n.getRootNode() !== root) continue; // outside this root: the outer walk has it
+        if (n.shadowRoot && n.shadowRoot !== root) walk(n.shadowRoot);
+        out.push(n);
+      }
+    };
+    walk(document);
+    return out;
+  }
+
+  // At the press: the element pressed (the real one inside an open shadow
+  // root), mapped to its tracking label or link, and the pointer's offset inside
+  // it. If that element is inside a fixed or sticky element, or has no box
+  // (0x0), the anchor is the first usable element under the press point instead
+  // (brief 5b: the element pressed itself, then document.elementsFromPoint, top
+  // to bottom; see firstUsableAnchor), so the start is the same as before and
+  // still follows layout shifts. Snap Linkit's own UI never qualifies: all of it
+  // is position: fixed (pinned by a unit test). null keeps the old maths:
+  // nothing usable above <html>/<body>, or no element at all.
   function pickDragAnchor(e) {
     const path = typeof e.composedPath === 'function' ? e.composedPath() : [];
-    let el = path.find(isElementNode) || (isElementNode(e.target) ? e.target : null);
-    if (!el || typeof el.closest !== 'function') return diagPick(null, DRAG_OFF_REASONS.noElement, el, e);
+    const hit = path.find(isElementNode) || (isElementNode(e.target) ? e.target : null);
+    if (!hit || typeof hit.closest !== 'function') return diagPick(null, DRAG_OFF_REASONS.noElement, hit, e);
     faultPoint('anchor'); // lab builds: choosing the anchor throws (the drag line's "off:threw")
-    const label = el.closest('label');
-    if (label && label.control && isTrackedBox(label.control)) {
-      el = label;
-    } else {
-      const link = el.closest('a[href]');
-      if (link) el = link;
+    const pressed = mapToAnchorElement(hit);
+    const reason = inFixedOrSticky(pressed) ? DRAG_OFF_REASONS.fixedOrSticky
+      : !anchorBox(pressed) ? DRAG_OFF_REASONS.noBox : null;
+    let el = pressed;
+    if (reason) {
+      // Only now is the point asked (normal presses cost nothing extra), and
+      // lazily: the element pressed itself may already do
+      const candidates = (function* () { yield hit; yield* elementsUnderPoint(e.clientX, e.clientY); })();
+      el = firstUsableAnchor(candidates, {
+        isStop: (n) => !isElementNode(n) || n === document.documentElement || n === document.body,
+        map: mapToAnchorElement,
+        usable: (n) => !inFixedOrSticky(n) && !!anchorBox(n),
+      });
+      if (!el) return diagPick(null, reason, pressed, e);
     }
-    if (inFixedOrSticky(el)) return diagPick(null, DRAG_OFF_REASONS.fixedOrSticky, el, e);
     const r = anchorBox(el);
-    if (!r) return diagPick(null, DRAG_OFF_REASONS.noBox, el, e);
     const root = typeof el.getRootNode === 'function' ? el.getRootNode() : document;
-    return diagPick({ el, offX: e.clientX - r.left, offY: e.clientY - r.top, key: anchorKey(el), root }, null, el, e);
+    return diagPick({ el, offX: e.clientX - r.left, offY: e.clientY - r.top, key: anchorKey(el), root }, reason, pressed, e);
   }
 
   // Before each update: is the pressed element still there? If the page
@@ -449,21 +489,23 @@
   }
 
   // pickDragAnchor's result, passed through unchanged. In test builds the drag
-  // record notes which return it was.
-  function diagPick(anchor, offReason, el, e) {
+  // record notes which return it was: "on", "on:<reason>" (an anchor found under
+  // the press point because the pressed element couldn't be one) or
+  // "off:<reason>". `pressed` names the element pressed; moved and gap are
+  // measured on the anchor (without one, on the element pressed).
+  function diagPick(anchor, reason, pressed, e) {
     if (SAVE_LOG && dragDiag) {
       try {
         const rec = dragDiag;
-        rec.protection = anchor ? 'on' : 'off:' + offReason;
+        rec.protection = anchor ? (reason ? 'on:' + reason : 'on') : 'off:' + reason;
         rec.anchor = !anchor ? 'none' : anchor.el.localName === 'label' ? 'label'
           : anchor.el instanceof HTMLAnchorElement ? 'link' : 'element';
         const keys = { tracked: 'row', id: 'id', link: 'link' };
         if (anchor && anchor.key && !(anchor.key.kind in keys)) throw new Error(`unknown key kind "${anchor.key.kind}"`);
         rec.key = anchor && anchor.key ? keys[anchor.key.kind] : 'none';
-        if (isElementNode(el)) {
-          rec.pressed = diagPressedName(el);
-          diagPlace(rec, el, e.clientY);
-        }
+        if (isElementNode(pressed)) rec.pressed = diagPressedName(pressed);
+        const ref = anchor ? anchor.el : pressed;
+        if (isElementNode(ref)) diagPlace(rec, ref, e.clientY);
       } catch (error) {
         dragDiag = null;
         diagFailed(error);

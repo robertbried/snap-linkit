@@ -11,7 +11,7 @@ test('SnapLinkitLib exposes every helper and is frozen', () => {
     'carefulProgressMessage', 'carefulFallbackMessage', 'carefulNotStartedMessage', 'clampMenuAxis', 'faultMatches', 'dragModifierMode', 'filenameFromUrl', 'fitMenuAxis', 'formatDurationEstimate', 'formatShortcut',
     'isDownloadableUrl', 'isOpenableUrl', 'isStyleHidden', 'isTrackedCheckbox', 'isValidPattern', 'isVersionBefore', 'majorityShouldCheck',
     'matchesPattern', 'normalizeReleaseAction', 'ordinaryCheckboxMessage', 'ordinaryUnreadMessage', 'plural',
-    'proxyLabelIndexes', 'rectsIntersect', 'selectionRect', 'rectFromPoints', 'dragStartPoint', 'uniqueMatch', 'dragPageChangedMessage', 'dragStartFailedMessage', 'DRAG_OFF_REASONS', 'DRAG_ENDS', 'dragDiagName', 'dragDiagPx', 'dragDiagLine', 'shouldOfferWhatsNew', 'whatsNewLines', 'whatsNewRecord', 'whatsNewShowsShortcuts',
+    'proxyLabelIndexes', 'rectsIntersect', 'selectionRect', 'rectFromPoints', 'dragStartPoint', 'uniqueMatch', 'firstUsableAnchor', 'dragPageChangedMessage', 'dragStartFailedMessage', 'DRAG_OFF_REASONS', 'DRAG_ENDS', 'dragDiagName', 'dragDiagPx', 'dragDiagLine', 'shouldOfferWhatsNew', 'whatsNewLines', 'whatsNewRecord', 'whatsNewShowsShortcuts',
   ].sort());
   assert.ok(Object.isFrozen(lib));
   assert.equal(globalThis.SnapLinkitLib, lib);
@@ -172,6 +172,64 @@ test('rectFromPoints U8: either way round, same as selectionRect without scroll'
   assert.deepEqual(lib.selectionRect({ x: 50, y: 30, scrollX: 0, scrollY: 0 }, { x: 10, y: 10 }, { x: 0, y: 0 }), r);
 });
 
+// Brief 5b: the fallback chain. Candidates are plain objects; `map` follows .mapped, `usable` reads .ok.
+const chain = (cands) => lib.firstUsableAnchor(cands, {
+  isStop: (c) => !!c.stop, map: (c) => c.mapped || c, usable: (c) => !!c.ok,
+});
+
+test('firstUsableAnchor: the mapped element (label or link) comes before the candidate itself', () => {
+  const label = { name: 'label', ok: true };
+  const hit = { name: 'hit', ok: true, mapped: label };
+  assert.equal(chain([hit]), label);
+});
+
+test('firstUsableAnchor: the candidate itself when its mapped element is unusable (e.g. a display:contents link)', () => {
+  const link = { name: 'link', ok: false };
+  const span = { name: 'span', ok: true, mapped: link };
+  assert.equal(chain([span]), span);
+});
+
+test('firstUsableAnchor: unusable candidates are skipped, in order (fixed/sticky or 0x0)', () => {
+  const sticky = { name: 'sticky', ok: false };
+  const a16 = { name: 'a16', ok: true };
+  const a17 = { name: 'a17', ok: true };
+  assert.equal(chain([sticky, sticky, a16, a17]), a16);
+});
+
+test('firstUsableAnchor: stops at <html>/<body> (null: the old maths), even with usable candidates after it', () => {
+  const sticky = { name: 'sticky', ok: false };
+  const body = { name: 'body', stop: true, ok: true };
+  const later = { name: 'later', ok: true };
+  assert.equal(chain([sticky, body, later]), null);
+  assert.equal(chain([]), null);
+  assert.equal(chain([sticky]), null);
+});
+
+test('firstUsableAnchor: lazy, nothing after the winner is read (the point is asked only when needed)', () => {
+  const read = [];
+  function* cands() {
+    for (const c of [{ name: 'hit', ok: true }, { name: 'never', ok: true }]) { read.push(c.name); yield c; }
+  }
+  assert.equal(chain(cands()).name, 'hit');
+  assert.deepEqual(read, ['hit']);
+});
+
+test('styles.css: Snap Linkit\'s own UI is position: fixed, so the fallback chain never anchors to it (brief 5b)', () => {
+  const css = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'src', 'styles.css'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '');
+  const UI = ['lasso', 'menu', 'toast', 'confirm', 'confirm-overlay'];
+  const seen = Object.fromEntries(UI.map((c) => [c, []]));
+  for (const m of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    const positions = [...m[2].matchAll(/(?:^|[;\s])position\s*:\s*([^;]+)/g)].map((x) => x[1].trim());
+    for (const sel of m[1].split(',')) {
+      const subject = sel.trim().split(/[\s>+~]+/).pop();
+      const hit = /^\.snaplinkit-([a-z-]+?)(?=$|[.:[])/.exec(subject);
+      if (hit && hit[1] in seen) seen[hit[1]].push(...positions);
+    }
+  }
+  for (const c of UI) assert.deepEqual([...new Set(seen[c])], ['fixed'], `.snaplinkit-${c}: ${JSON.stringify(seen[c])}`);
+});
+
 test('dragPageChangedMessage: the on-screen text of decision 2', () => {
   assert.equal(lib.dragPageChangedMessage(), 'The page changed under the drag; drag again.');
 });
@@ -202,7 +260,7 @@ test('dragDiagLine: every end and every protection value', () => {
   assert.deepEqual({ ...lib.DRAG_OFF_REASONS },
     { fixedOrSticky: 'fixed-or-sticky', noBox: 'no-box', noElement: 'no-element', threw: 'threw' });
   assert.ok(Object.isFrozen(lib.DRAG_OFF_REASONS) && Object.isFrozen(lib.DRAG_ENDS));
-  for (const protection of ['on', ...Object.values(lib.DRAG_OFF_REASONS).map((r) => 'off:' + r)]) {
+  for (const protection of ['on', ...Object.values(lib.DRAG_OFF_REASONS).flatMap((r) => ['off:' + r, 'on:' + r])]) {
     assert.equal(diagFields(lib.dragDiagLine({ ...DIAG, protection })).protection, protection);
   }
 });
@@ -247,6 +305,7 @@ test('dragDiagPx: signs, rounding and n/a', () => {
 test('dragDiagLine: values outside the documented sets throw (the caller reports "drag line failed")', () => {
   const bad = [
     { n: 0 }, { n: 1.5 }, { end: 'cancel' }, { protection: 'off' }, { protection: 'off:unknown' }, { protection: 'yes' },
+    { protection: 'on:' }, { protection: 'on:unknown' }, { protection: 'on:off:no-box' },
     { anchor: 'div' }, { key: 'tracked' }, { refind: 'found:0' }, { refind: 'found' }, { selected: -1 }, { boxes: 1.5 },
     { links: undefined }, { updates: null }, { slowest: -1 }, { scrollPause: NaN },
   ];
