@@ -11,7 +11,7 @@ test('SnapLinkitLib exposes every helper and is frozen', () => {
     'carefulProgressMessage', 'carefulFallbackMessage', 'carefulNotStartedMessage', 'clampMenuAxis', 'faultMatches', 'dragModifierMode', 'filenameFromUrl', 'fitMenuAxis', 'formatDurationEstimate', 'formatShortcut',
     'isDownloadableUrl', 'isOpenableUrl', 'isStyleHidden', 'isTrackedCheckbox', 'isValidPattern', 'isVersionBefore', 'majorityShouldCheck',
     'matchesPattern', 'normalizeReleaseAction', 'ordinaryCheckboxMessage', 'ordinaryUnreadMessage', 'plural',
-    'proxyLabelIndexes', 'rectsIntersect', 'selectionRect', 'rectFromPoints', 'dragStartPoint', 'uniqueMatch', 'dragPageChangedMessage', 'DRAG_OFF_REASONS', 'DRAG_ENDS', 'dragDiagName', 'dragDiagPx', 'dragDiagLine', 'shouldOfferWhatsNew', 'whatsNewLines', 'whatsNewRecord', 'whatsNewShowsShortcuts',
+    'proxyLabelIndexes', 'rectsIntersect', 'selectionRect', 'rectFromPoints', 'dragStartPoint', 'uniqueMatch', 'dragPageChangedMessage', 'dragStartFailedMessage', 'DRAG_OFF_REASONS', 'DRAG_ENDS', 'dragDiagName', 'dragDiagPx', 'dragDiagLine', 'shouldOfferWhatsNew', 'whatsNewLines', 'whatsNewRecord', 'whatsNewShowsShortcuts',
   ].sort());
   assert.ok(Object.isFrozen(lib));
   assert.equal(globalThis.SnapLinkitLib, lib);
@@ -176,6 +176,10 @@ test('dragPageChangedMessage: the on-screen text of decision 2', () => {
   assert.equal(lib.dragPageChangedMessage(), 'The page changed under the drag; drag again.');
 });
 
+test('dragStartFailedMessage: the on-screen text Rob approved for a failed drag start (brief 5)', () => {
+  assert.equal(lib.dragStartFailedMessage(), "Snap Linkit couldn't start this selection; drag again.");
+});
+
 // Brief 4: the test-build drag line (one per drag)
 const DIAG = {
   n: 1, end: 'release', protection: 'on', anchor: 'label', key: 'row', refind: 'none', pressed: 'Master Support (Legacy)',
@@ -193,7 +197,7 @@ test('dragDiagLine: the exact line for a normal drag', () => {
 });
 
 test('dragDiagLine: every end and every protection value', () => {
-  assert.deepEqual([...lib.DRAG_ENDS], ['release', 'esc', 'page-changed', 'switched-off', 'replaced']);
+  assert.deepEqual([...lib.DRAG_ENDS], ['release', 'esc', 'page-changed', 'switched-off', 'replaced', 'start-failed']);
   for (const end of lib.DRAG_ENDS) assert.equal(diagFields(lib.dragDiagLine({ ...DIAG, end })).end, end);
   assert.deepEqual({ ...lib.DRAG_OFF_REASONS },
     { fixedOrSticky: 'fixed-or-sticky', noBox: 'no-box', noElement: 'no-element', threw: 'threw' });
@@ -201,6 +205,13 @@ test('dragDiagLine: every end and every protection value', () => {
   for (const protection of ['on', ...Object.values(lib.DRAG_OFF_REASONS).map((r) => 'off:' + r)]) {
     assert.equal(diagFields(lib.dragDiagLine({ ...DIAG, protection })).protection, protection);
   }
+});
+
+test('dragDiagLine: the exact line for a drag whose start failed (brief 5)', () => {
+  assert.equal(lib.dragDiagLine({ ...DIAG, end: 'start-failed', protection: 'off:threw', anchor: 'none', key: 'none', pressed: 'a',
+    moved: 0, gap: null, selected: 0, boxes: 0, links: 0, first: null, last: null, updates: 0, slowest: 0, scrollPause: 0 }),
+    '[Snap Linkit] drag 1: end=start-failed protection=off:threw anchor=none key=none refind=none pressed="a" ' +
+    'moved=0px gap=n/a selected=0 boxes=0 links=0 first="" last="" updates=0 slowest=0ms scrollPause=0ms');
 });
 
 test('dragDiagLine: anchor, key and re-find values', () => {

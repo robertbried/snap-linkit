@@ -180,6 +180,13 @@
     return 'The page changed under the drag; drag again.';
   }
 
+  // Shown (until clicked) when the drag's start couldn't be set up at the
+  // press (choosing its anchor threw) and the press became a drag: the drag is
+  // cancelled, nothing is done (brief 5).
+  function dragStartFailedMessage() {
+    return "Snap Linkit couldn't start this selection; drag again.";
+  }
+
   // ---- Test builds only: one diagnostic console line per drag (brief 4) ----
   // Why a drag's protection (brief 3's anchor) was off. One list, shared with
   // the code that decides it, so later briefs reuse the same names.
@@ -187,10 +194,10 @@
     fixedOrSticky: 'fixed-or-sticky', // the pressed element is inside a fixed or sticky element
     noBox: 'no-box',                  // the pressed element has a 0x0 box
     noElement: 'no-element',          // no element under the pointer
-    threw: 'threw',                   // choosing the anchor threw (the drag went on without one)
+    threw: 'threw',                   // choosing the anchor threw (a drag from that press is cancelled: end=start-failed)
   });
-  // How a drag ended
-  const DRAG_ENDS = Object.freeze(['release', 'esc', 'page-changed', 'switched-off', 'replaced']);
+  // How a drag ended (start-failed: the anchor couldn't be chosen at the press, brief 5)
+  const DRAG_ENDS = Object.freeze(['release', 'esc', 'page-changed', 'switched-off', 'replaced', 'start-failed']);
   const DRAG_ANCHOR_KINDS = Object.freeze(['label', 'link', 'element', 'none']);
   const DRAG_KEY_KINDS = Object.freeze(['row', 'id', 'link', 'none']);
 
@@ -591,6 +598,7 @@
     dragStartPoint,
     uniqueMatch,
     dragPageChangedMessage,
+    dragStartFailedMessage,
     DRAG_OFF_REASONS,
     DRAG_ENDS,
     dragDiagName,

@@ -9,7 +9,7 @@
   // Pure helpers live in lib/helpers.js (loaded first by the manifest)
   const {
     isOpenableUrl, matchesPattern, rectsIntersect, rectFromPoints, dragStartPoint,
-    uniqueMatch, dragPageChangedMessage, DRAG_OFF_REASONS, dragDiagLine, TRACKED_CHECKBOX_SELECTOR,
+    uniqueMatch, dragPageChangedMessage, dragStartFailedMessage, DRAG_OFF_REASONS, dragDiagLine, TRACKED_CHECKBOX_SELECTOR,
     isDownloadableUrl, majorityShouldCheck, plural, fitMenuAxis, clampMenuAxis,
     normalizeReleaseAction, dragModifierMode, isStyleHidden, proxyLabelIndexes,
     TRACKED_TABLE_SELECTOR, isTrackedCheckbox, afterClickOutcome, ordinaryCheckboxMessage,
@@ -64,6 +64,7 @@
     modifierMode: null,
     scrollInterval: null,
     anchor: null,        // { el, offX, offY, key, root }: the element pressed (brief 3); null = old maths
+    pressFailed: false,  // choosing the anchor threw at the press: a drag from it is cancelled (brief 5)
   };
 
   // Extension active state (can be disabled via blacklist)
@@ -431,8 +432,8 @@
   }
 
   // At the press, before the anchor is chosen. The record starts as "off:threw"
-  // and diagPick overwrites that when pickDragAnchor returns, so a throw inside
-  // it leaves exactly that (there is no try/catch around pickDragAnchor).
+  // and diagPick overwrites that when pickDragAnchor returns; onMouseDown's
+  // catch records a throw through diagPick too, so the marker is only a backstop.
   function diagPress(e) {
     try {
       if (dragDiag && dragDiag.started) diagWrite('replaced');
@@ -484,7 +485,7 @@
   }
 
   // Write the drag's line, once. `end`: release, esc, page-changed,
-  // switched-off or replaced.
+  // switched-off, replaced or start-failed.
   function diagWrite(end) {
     const rec = dragDiag;
     dragDiag = null;
@@ -1572,7 +1573,7 @@
   }
 
   // Abort any in-progress drag, drop the selection and close the menu
-  // `end` says why, for the test-build drag line: esc, page-changed or switched-off
+  // `end` says why, for the test-build drag line: esc, page-changed, switched-off or start-failed
   function cancelSelection(end) {
     if (SAVE_LOG && dragDiag && dragDiag.started) diagWrite(end);
     state.isSelecting = false;
@@ -1666,15 +1667,32 @@
       hideMenu();
     }
 
-    // Track potential drag start - don't activate until MIN_DRAG_DISTANCE
+    // Choose the drag's anchor (brief 3) before anything marks the drag as
+    // started, so a failure can't leave a half-started drag (brief 5). A
+    // failure is reported in the console and marks the press: if it becomes a
+    // drag, onMouseMove cancels it and says so; a plain right-click stays one.
+    if (SAVE_LOG) diagPress(e); // test builds: the drag line's record ("off:threw" until pickDragAnchor returns)
+    let anchor = null;
+    let pressFailed = false;
+    try {
+      anchor = pickDragAnchor(e);
+    } catch (error) {
+      pressFailed = true;
+      console.error(`[Snap Linkit] Could not start the selection: ${error && error.message ? error.message : String(error)}`, error);
+      diagPick(null, DRAG_OFF_REASONS.threw, null, e); // test builds: the drag line's "off:threw"
+    }
+
+    // Track potential drag start - don't activate until MIN_DRAG_DISTANCE.
+    // Every piece of press state is set on both paths, so nothing from the
+    // previous drag survives this press.
     state.isSelecting = true;
     state.isDragging = false; // Not dragging yet - waiting for threshold
+    state.pressFailed = pressFailed;
+    state.anchor = anchor;
     state.startX = e.clientX;
     state.startY = e.clientY;
     state.startScrollX = window.scrollX;
     state.startScrollY = window.scrollY;
-    if (SAVE_LOG) diagPress(e); // test builds: the drag line's record ("off:threw" until pickDragAnchor returns)
-    state.anchor = pickDragAnchor(e);
     state.currentX = e.clientX;
     state.currentY = e.clientY;
     // Ctrl (or, unadvertised, Shift) = add, Alt = remove: see dragModifierMode
@@ -1705,6 +1723,17 @@
       state.isDragging = true;
       if (SAVE_LOG && dragDiag) dragDiag.started = true; // test builds: this drag gets a line
       state.blockNextContextMenu = true; // Block context menu since we're dragging
+
+      // The anchor couldn't be chosen at the press (brief 5): cancel the drag
+      // and say so (nothing is clicked, opened or saved; the browser menu stays
+      // blocked on this release). The selection is dropped first, as Esc drops
+      // it, so the test-build line shows what the drag left: nothing.
+      if (state.pressFailed) {
+        clearSelection();
+        cancelSelection('start-failed');
+        showToastOrLog(dragStartFailedMessage(), { sticky: true });
+        return;
+      }
 
       // Modifier drags build on the existing selection; a plain drag starts fresh
       if (state.modifierMode) {
