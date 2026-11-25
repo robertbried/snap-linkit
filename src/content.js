@@ -359,11 +359,18 @@
     return r.width === 0 && r.height === 0 ? null : r;
   }
 
+  // The next node up from n, crossing out of a shadow root to its host; null
+  // at the top. The one walk for C's fixed container (nearestFixed,
+  // isInsideComposed) and 5b's fixed-or-sticky anchor rule (inFixedOrSticky).
+  function composedParent(n) {
+    return n.parentElement || (typeof n.getRootNode === 'function' && n.getRootNode().host) || null;
+  }
+
   // Inside a position: fixed or sticky element (crossing shadow roots)? Such an
   // element stays put while the page scrolls, so a start tied to it would move
   // with the window: the anchor is looked for under it instead (brief 5b).
   function inFixedOrSticky(el) {
-    for (let n = el; isElementNode(n); n = n.parentElement || (typeof n.getRootNode === 'function' && n.getRootNode().host) || null) {
+    for (let n = el; isElementNode(n); n = composedParent(n)) {
       const pos = window.getComputedStyle(n).position;
       if (pos === 'fixed' || pos === 'sticky') return true;
     }
@@ -495,7 +502,7 @@
 
   // C: the nearest position: fixed element around el (crossing shadow roots), or null
   function nearestFixed(el) {
-    for (let n = el; isElementNode(n); n = n.parentElement || (typeof n.getRootNode === 'function' && n.getRootNode().host) || null) {
+    for (let n = el; isElementNode(n); n = composedParent(n)) {
       if (window.getComputedStyle(n).position === 'fixed') return n;
     }
     return null;
@@ -503,7 +510,7 @@
 
   // Is el inside container (crossing shadow roots)?
   function isInsideComposed(container, el) {
-    for (let n = el; n; n = n.parentElement || (typeof n.getRootNode === 'function' && n.getRootNode().host) || null) {
+    for (let n = el; n; n = composedParent(n)) {
       if (n === container) return true;
     }
     return false;
