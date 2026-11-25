@@ -361,6 +361,17 @@
     return { x: Math.min(Math.max(point.x, 0), area.width), y: Math.min(Math.max(point.y, 0), area.height) };
   }
 
+  // The live count on the selection box: what a release would act on. Links
+  // win (the caller counts them once per address); otherwise checkboxes, then
+  // radio buttons. '' = nothing a release would act on: the label hides.
+  //   { links, boxes, radios }
+  function liveCountText(c) {
+    if (c.links > 0) return plural(c.links, 'link');
+    if (c.boxes > 0) return `${c.boxes} ${c.boxes === 1 ? 'box' : 'boxes'}`;
+    if (c.radios > 0) return plural(c.radios, 'radio button');
+    return '';
+  }
+
   // A1: does the page need a new update because it scrolled? Plain facts:
   // last / now: the window's scroll position { x, y } at the last update and
   // now; inner: a scrolling box inside the page scrolled since the last
@@ -811,6 +822,7 @@
     autoScrollRate,
     autoScrollDelta,
     clampToArea,
+    liveCountText,
     trackingLock,
     fixedContainerAllows,
     selectableVerdict,

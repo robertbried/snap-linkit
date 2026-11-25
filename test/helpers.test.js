@@ -11,7 +11,7 @@ test('SnapLinkitLib exposes every helper and is frozen', () => {
     'carefulProgressMessage', 'carefulFallbackMessage', 'carefulNotStartedMessage', 'clampMenuAxis', 'faultMatches', 'dragModifierMode', 'filenameFromUrl', 'fitMenuAxis', 'formatDurationEstimate', 'formatShortcut',
     'isDownloadableUrl', 'isOpenableUrl', 'isStyleHidden', 'isTrackedCheckbox', 'isValidPattern', 'isVersionBefore', 'majorityShouldCheck',
     'matchesPattern', 'normalizeReleaseAction', 'ordinaryCheckboxMessage', 'ordinaryUnreadMessage', 'plural',
-    'proxyLabelIndexes', 'rectsIntersect', 'selectionRect', 'rectFromPoints', 'dragStartPoint', 'uniqueMatch', 'firstUsableAnchor', 'dragPageChangedMessage', 'dragStartFailedMessage', 'DRAG_OFF_REASONS', 'DRAG_ENDS', 'dragDiagName', 'dragDiagPx', 'dragDiagLine', 'DRAG_EXTRAS', 'dragFollowNeeded', 'trackingLock', 'fixedContainerAllows', 'autoScrollStep', 'autoScrollZone', 'AUTO_SCROLL_CREEP', 'AUTO_SCROLL_CAP', 'autoScrollRate', 'autoScrollDelta', 'clampToArea', 'selectableVerdict', 'labelMapFrom', 'touchesSelection', 'onlyOwnClassChange', 'pageChangeMarksStale', 'shouldOfferWhatsNew', 'whatsNewLines', 'whatsNewRecord', 'whatsNewShowsShortcuts',
+    'proxyLabelIndexes', 'rectsIntersect', 'selectionRect', 'rectFromPoints', 'dragStartPoint', 'uniqueMatch', 'firstUsableAnchor', 'dragPageChangedMessage', 'dragStartFailedMessage', 'DRAG_OFF_REASONS', 'DRAG_ENDS', 'dragDiagName', 'dragDiagPx', 'dragDiagLine', 'DRAG_EXTRAS', 'dragFollowNeeded', 'trackingLock', 'fixedContainerAllows', 'autoScrollStep', 'autoScrollZone', 'AUTO_SCROLL_CREEP', 'AUTO_SCROLL_CAP', 'autoScrollRate', 'autoScrollDelta', 'clampToArea', 'liveCountText', 'selectableVerdict', 'labelMapFrom', 'touchesSelection', 'onlyOwnClassChange', 'pageChangeMarksStale', 'shouldOfferWhatsNew', 'whatsNewLines', 'whatsNewRecord', 'whatsNewShowsShortcuts',
   ].sort());
   assert.ok(Object.isFrozen(lib));
   assert.equal(globalThis.SnapLinkitLib, lib);
@@ -421,6 +421,16 @@ test('clampToArea (A2): the pointer end held inside the visible window', () => {
   assert.deepEqual(lib.clampToArea({ x: 500, y: 400 }, A), { x: 500, y: 400 });
   assert.deepEqual(lib.clampToArea({ x: 1200, y: 1100 }, A), { x: 1000, y: 800 });
   assert.deepEqual(lib.clampToArea({ x: -50, y: -10 }, A), { x: 0, y: 0 });
+});
+
+test('liveCountText: what a release would act on; links win; singular and plural', () => {
+  assert.equal(lib.liveCountText({ links: 3, boxes: 16, radios: 0 }), '3 links');
+  assert.equal(lib.liveCountText({ links: 1 }), '1 link');
+  assert.equal(lib.liveCountText({ links: 0, boxes: 16 }), '16 boxes');
+  assert.equal(lib.liveCountText({ links: 0, boxes: 1 }), '1 box');
+  assert.equal(lib.liveCountText({ links: 0, boxes: 0, radios: 2 }), '2 radio buttons');
+  assert.equal(lib.liveCountText({ links: 0, boxes: 0, radios: 1 }), '1 radio button');
+  assert.equal(lib.liveCountText({ links: 0, boxes: 0, radios: 0 }), '');
 });
 
 test('dragDiagLine: rebuilds, the last field (brief 7)', () => {

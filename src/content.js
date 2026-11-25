@@ -11,7 +11,7 @@
     isOpenableUrl, matchesPattern, rectsIntersect, rectFromPoints, dragStartPoint,
     uniqueMatch, firstUsableAnchor, dragPageChangedMessage, dragStartFailedMessage, DRAG_OFF_REASONS, dragDiagLine, TRACKED_CHECKBOX_SELECTOR,
     dragFollowNeeded, trackingLock, fixedContainerAllows,
-    autoScrollStep, autoScrollZone, autoScrollRate, autoScrollDelta, clampToArea,
+    autoScrollStep, autoScrollZone, autoScrollRate, autoScrollDelta, clampToArea, liveCountText,
     isDownloadableUrl, majorityShouldCheck, plural, fitMenuAxis, clampMenuAxis,
     normalizeReleaseAction, dragModifierMode, isStyleHidden, proxyLabelIndexes,
     TRACKED_TABLE_SELECTOR, isTrackedCheckbox, afterClickOutcome, ordinaryCheckboxMessage,
@@ -80,6 +80,7 @@
   // DOM ELEMENTS
   // ============================================
   let lassoEl = null;
+  let lassoCount = null; // the live count on the box (its child)
   let menuEl = null;
   let confirmDialog = null; // { el, cancel } while the "Open N tabs?" confirm is showing
   let menuDrag = null;      // { offsetX, offsetY, width, height, moved } while the menu is being dragged
@@ -830,8 +831,49 @@
     lassoEl = document.createElement('div');
     lassoEl.className = 'snaplinkit-lasso';
     lassoEl.style.display = 'none';
+    lassoCount = document.createElement('div');
+    lassoCount.className = 'snaplinkit-count';
+    // Styled here rather than in styles.css (the package's stylesheet stays the
+    // released 1.4.0 one): the menu's colours, a small neon pill
+    lassoCount.style.cssText = 'position: absolute; bottom: 4px; right: 4px; padding: 0.15em 0.6em; background: #130e22; color: #f4e8ff; ' +
+      'border: 1.5px solid #8418b1; border-radius: 0.7em; box-shadow: 0 0 6px rgba(198, 7, 241, 0.55); ' +
+      "font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-weight: 600; line-height: 1.3; " +
+      'white-space: nowrap; pointer-events: none; display: none;';
+    lassoEl.appendChild(lassoCount);
     document.body.appendChild(lassoEl);
     return lassoEl;
+  }
+
+  // The live count: what a release would act on (links once per address, or
+  // boxes), in the box's corner at the pointer. Its text keeps its size on
+  // screen when the page is zoomed out (like the auto-scroll zone). Written
+  // only when it changes.
+  function updateLiveCount(rect) {
+    if (!lassoCount) return;
+    const { links, checkboxes, radios } = categorizeSelection();
+    const text = links.length > 0
+      ? (getUniqueUrls().length > 0 ? liveCountText({ links: getUniqueUrls().length }) : '')
+      : liveCountText({ links: 0, boxes: checkboxes.length, radios: radios.length });
+    if (lassoCount.textContent !== text) lassoCount.textContent = text;
+    const display = text ? '' : 'none';
+    if (lassoCount.style.display !== display) lassoCount.style.display = display;
+    const dpr = typeof window.devicePixelRatio === 'number' && window.devicePixelRatio > 0 ? window.devicePixelRatio : 1;
+    const size = `${Math.round(12 * Math.max(1, 1.5 / dpr))}px`;
+    if (lassoCount.style.fontSize !== size) lassoCount.style.fontSize = size;
+    if (rect) {
+      // The corner at the pointer: top when dragging up, left when dragging left
+      const p = clampToArea({ x: state.currentX, y: state.currentY }, visibleArea());
+      const top = p.y < rect.top + rect.height / 2;
+      const left = p.x < rect.left + rect.width / 2;
+      const corner = (top ? 'top' : 'bottom') + '-' + (left ? 'left' : 'right');
+      if (lassoCount.getAttribute('data-corner') !== corner) {
+        lassoCount.setAttribute('data-corner', corner);
+        lassoCount.style.top = top ? '4px' : 'auto';
+        lassoCount.style.bottom = top ? 'auto' : '4px';
+        lassoCount.style.left = left ? '4px' : 'auto';
+        lassoCount.style.right = left ? 'auto' : '4px';
+      }
+    }
   }
 
   function updateLasso() {
@@ -841,7 +883,9 @@
     lassoEl.style.top = `${rect.top}px`;
     lassoEl.style.width = `${rect.width}px`;
     lassoEl.style.height = `${rect.height}px`;
+    lassoRect = rect;
   }
+  let lassoRect = null; // the box as last drawn (the live count's corner)
 
   // Show menu ONLY for links
   function showMenu(x, y) {
@@ -1873,6 +1917,7 @@
   function updateLassoAndSelection() {
     updateLasso();
     updateSelection();
+    updateLiveCount(lassoRect);
     if (dragFollow) {
       dragFollow.last = { x: window.scrollX, y: window.scrollY };
       dragFollow.inner = false;
