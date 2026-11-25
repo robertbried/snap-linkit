@@ -279,12 +279,31 @@
   //   lock: "tracking" when the drag selects only Fandom tracking boxes (B)
   //   fixedOut: elements left out because they sit in a fixed container the drag wasn't pressed in (C)
   //   topSpeed: the fastest auto-scroll rate this drag reached, CSS px per second (A2)
+  //   carried: "last-seen" when the pressed element was lost for good and the
+  //            drag carried on from where it was last seen; "no" otherwise (it
+  //            stayed, was found again, the drag had none, or it was cancelled:
+  //            end=page-changed refind=cancelled) (ultrareview 1, #1)
   const DRAG_EXTRAS = Object.freeze([
     ['follows', 'count'],
     ['lock', ['tracking', 'none']],
     ['fixedOut', 'count'],
     ['topSpeed', 'count'],
+    ['carried', ['no', 'last-seen']],
   ].map(Object.freeze));
+
+  // The pressed element is gone for good mid-drag (removed, or 0x0, and not
+  // found again uniquely). What happens to the drag (ultrareview 1, #1):
+  //   'cancel'   a drag locked to Fandom tracking boxes (B's lock): a start no
+  //              longer tied to the pressed row could save the wrong boxes, so
+  //              the drag ends with "The page changed under the drag";
+  //   'carry-on' any other drag: it carries on from where the pressed element
+  //              was last seen. Virtualised feeds remove rows that scroll away
+  //              and hover-only buttons hide; the box keeps showing what a
+  //              release would act on.
+  //   { trackLock }   trackLock = the drag is locked to tracking boxes
+  function anchorLostOutcome(f) {
+    return f && f.trackLock === true ? 'cancel' : 'carry-on';
+  }
 
   // C: may an element inside a position: fixed container be selected? Plain
   // facts: { inFixed: it sits inside a fixed container, pressedInside: the
@@ -815,6 +834,7 @@
     dragDiagPx,
     dragDiagLine,
     DRAG_EXTRAS,
+    anchorLostOutcome,
     dragFollowNeeded,
     autoScrollStep,
     autoScrollZone,

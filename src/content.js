@@ -10,7 +10,7 @@
   const {
     isOpenableUrl, matchesPattern, rectsIntersect, rectFromPoints, dragStartPoint,
     uniqueMatch, firstUsableAnchor, dragPageChangedMessage, dragStartFailedMessage, DRAG_OFF_REASONS, dragDiagLine, TRACKED_CHECKBOX_SELECTOR,
-    dragFollowNeeded, trackingLock, fixedContainerAllows,
+    dragFollowNeeded, trackingLock, fixedContainerAllows, anchorLostOutcome,
     autoScrollStep, autoScrollZone, autoScrollRate, autoScrollDelta, clampToArea, liveCountText,
     isDownloadableUrl, majorityShouldCheck, plural, fitMenuAxis, clampMenuAxis,
     normalizeReleaseAction, dragModifierMode, isStyleHidden, proxyLabelIndexes,
@@ -70,6 +70,8 @@
     pressFailed: false,  // choosing the anchor threw at the press: a drag from it is cancelled (brief 5)
     trackLock: false,    // pressed in a Fandom tracking cell: the drag selects only tracking boxes (B)
     pressEl: null,       // the element pressed (not brief 5b's fallback anchor): the fixed-container rule (C)
+    lastSeen: null,      // { x, y }: the start's page position at the last update while it had an anchor; after the
+                         // pressed element is lost for good, the drag carries on from here (ultrareview 1, #1)
   };
 
   // Extension active state (can be disabled via blacklist)
@@ -275,12 +277,18 @@
   function getSelectionRect() {
     const a = state.anchor;
     const scroll = { x: window.scrollX, y: window.scrollY };
+    // No anchor: the press moved by the scroll, or, once the pressed element
+    // was lost for good, where it was last seen (also a page position)
+    const fallback = state.lastSeen
+      ? { x: state.lastSeen.x, y: state.lastSeen.y, scrollX: 0, scrollY: 0 }
+      : { x: state.startX, y: state.startY, scrollX: state.startScrollX, scrollY: state.startScrollY };
     const start = dragStartPoint(
       a ? { offX: a.offX, offY: a.offY } : null,
       a ? anchorBox(a.el) : null,
       scroll,
-      { x: state.startX, y: state.startY, scrollX: state.startScrollX, scrollY: state.startScrollY }
+      fallback
     );
+    if (a) state.lastSeen = { x: start.x + scroll.x, y: start.y + scroll.y };
     if (SAVE_LOG && dragDiag) dragDiag.lastStartPageY = start.y + scroll.y; // test builds: the drag line's gap
     // A2: the pointer end stays inside the visible window (nothing unseen is selected)
     return rectFromPoints(start, clampToArea({ x: state.currentX, y: state.currentY }, visibleArea()));
@@ -545,6 +553,14 @@
       if (SAVE_LOG && dragDiag) dragDiag.refinds++;
       return true;
     }
+    // Gone for good. A drag locked to tracking boxes is cancelled (it could
+    // save the wrong boxes); any other drag carries on from where the pressed
+    // element was last seen (state.lastSeen, kept by getSelectionRect)
+    if (anchorLostOutcome({ trackLock: state.trackLock }) === 'carry-on') {
+      state.anchor = null;
+      if (SAVE_LOG && dragDiag) dragDiag.carried = true;
+      return true;
+    }
     if (SAVE_LOG && dragDiag) dragDiag.refindCancelled = true;
     cancelSelection('page-changed');
     showToastOrLog(dragPageChangedMessage(), { sticky: true });
@@ -609,7 +625,7 @@
       const el = isElementNode(e.target) ? e.target : null;
       dragDiag = { started: false, protection: 'off:' + DRAG_OFF_REASONS.threw, anchor: 'none', key: 'none',
         refinds: 0, refindCancelled: false, el: null, pressed: el ? diagPressedName(el) : null, pressPageY: null,
-        offY: null, updates: 0, slowest: 0, scrollPause: 0, lastScrollUpdate: null, lastStartPageY: null, follows: 0, fixedOut: new Set(), topSpeed: 0 };
+        offY: null, updates: 0, slowest: 0, scrollPause: 0, lastScrollUpdate: null, lastStartPageY: null, follows: 0, fixedOut: new Set(), topSpeed: 0, carried: false };
       if (el) diagPlace(dragDiag, el, e.clientY);
     } catch (error) {
       dragDiag = null;
@@ -696,6 +712,7 @@
         lock: state.trackLock ? 'tracking' : 'none',
         fixedOut: rec.fixedOut.size,
         topSpeed: rec.topSpeed,
+        carried: rec.carried ? 'last-seen' : 'no',
       }));
     } catch (error) {
       diagFailed(error);
@@ -1858,6 +1875,7 @@
     state.isSelecting = false;
     state.isDragging = false;
     state.anchor = null;
+    state.lastSeen = null;
     stopAutoScroll();
     stopDragFollow();
     if (lassoEl) lassoEl.style.display = 'none';
@@ -2067,6 +2085,7 @@
     state.isDragging = false; // Not dragging yet - waiting for threshold
     state.pressFailed = pressFailed;
     state.anchor = anchor;
+    state.lastSeen = null;
     state.trackLock = trackLock;
     state.pressEl = pressEl;
     state.startX = e.clientX;
@@ -2163,6 +2182,7 @@
     state.isSelecting = false;
     state.isDragging = false;
     state.anchor = null;
+    state.lastSeen = null;
     stopAutoScroll();
     stopDragFollow();
 

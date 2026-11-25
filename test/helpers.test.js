@@ -11,7 +11,7 @@ test('SnapLinkitLib exposes every helper and is frozen', () => {
     'carefulProgressMessage', 'carefulFallbackMessage', 'carefulNotStartedMessage', 'clampMenuAxis', 'faultMatches', 'dragModifierMode', 'filenameFromUrl', 'fitMenuAxis', 'formatDurationEstimate', 'formatShortcut',
     'isDownloadableUrl', 'isOpenableUrl', 'isStyleHidden', 'isTrackedCheckbox', 'isValidPattern', 'isVersionBefore', 'majorityShouldCheck',
     'matchesPattern', 'normalizeReleaseAction', 'ordinaryCheckboxMessage', 'ordinaryUnreadMessage', 'plural',
-    'proxyLabelIndexes', 'rectsIntersect', 'selectionRect', 'rectFromPoints', 'dragStartPoint', 'uniqueMatch', 'firstUsableAnchor', 'dragPageChangedMessage', 'dragStartFailedMessage', 'DRAG_OFF_REASONS', 'DRAG_ENDS', 'dragDiagName', 'dragDiagPx', 'dragDiagLine', 'DRAG_EXTRAS', 'dragFollowNeeded', 'trackingLock', 'fixedContainerAllows', 'autoScrollStep', 'autoScrollZone', 'AUTO_SCROLL_CREEP', 'AUTO_SCROLL_CAP', 'autoScrollRate', 'autoScrollDelta', 'clampToArea', 'liveCountText', 'selectableVerdict', 'labelMapFrom', 'touchesSelection', 'onlyOwnClassChange', 'pageChangeMarksStale', 'shouldOfferWhatsNew', 'whatsNewLines', 'whatsNewRecord', 'whatsNewShowsShortcuts',
+    'proxyLabelIndexes', 'rectsIntersect', 'selectionRect', 'rectFromPoints', 'dragStartPoint', 'uniqueMatch', 'firstUsableAnchor', 'dragPageChangedMessage', 'dragStartFailedMessage', 'DRAG_OFF_REASONS', 'DRAG_ENDS', 'dragDiagName', 'dragDiagPx', 'dragDiagLine', 'DRAG_EXTRAS', 'anchorLostOutcome', 'dragFollowNeeded', 'trackingLock', 'fixedContainerAllows', 'autoScrollStep', 'autoScrollZone', 'AUTO_SCROLL_CREEP', 'AUTO_SCROLL_CAP', 'autoScrollRate', 'autoScrollDelta', 'clampToArea', 'liveCountText', 'selectableVerdict', 'labelMapFrom', 'touchesSelection', 'onlyOwnClassChange', 'pageChangeMarksStale', 'shouldOfferWhatsNew', 'whatsNewLines', 'whatsNewRecord', 'whatsNewShowsShortcuts',
   ].sort());
   assert.ok(Object.isFrozen(lib));
   assert.equal(globalThis.SnapLinkitLib, lib);
@@ -365,9 +365,36 @@ test('fixedContainerAllows (C): an element in a fixed container only when the dr
 });
 
 test('dragDiagLine: fixedOut after lock (C)', () => {
-  assert.deepEqual(lib.DRAG_EXTRAS.map(([k]) => k), ['follows', 'lock', 'fixedOut', 'topSpeed']);
+  assert.deepEqual(lib.DRAG_EXTRAS.map(([k]) => k).slice(0, 4), ['follows', 'lock', 'fixedOut', 'topSpeed']);
   assert.match(lib.dragDiagLine({ ...DIAG, follows: 0, lock: 'none', fixedOut: 2 }), / follows=0 lock=none fixedOut=2$/);
   assert.throws(() => lib.dragDiagLine({ ...DIAG, fixedOut: -1 }), /^Error: dragDiagLine: bad fixedOut/);
+});
+
+test('anchorLostOutcome (ultrareview 1, #1): only a drag locked to tracking boxes is cancelled; any other carries on', () => {
+  assert.equal(lib.anchorLostOutcome({ trackLock: true }), 'cancel');
+  assert.equal(lib.anchorLostOutcome({ trackLock: false }), 'carry-on');
+  assert.equal(lib.anchorLostOutcome({}), 'carry-on');
+  assert.equal(lib.anchorLostOutcome(null), 'carry-on');
+  assert.equal(lib.anchorLostOutcome({ trackLock: 'yes' }), 'carry-on'); // only a real true locks
+});
+
+test('dragDiagLine: carried=no|last-seen, the last field (ultrareview 1, #1)', () => {
+  assert.deepEqual(lib.DRAG_EXTRAS.map(([k]) => k), ['follows', 'lock', 'fixedOut', 'topSpeed', 'carried']);
+  assert.match(lib.dragDiagLine({ ...DIAG, follows: 0, lock: 'none', fixedOut: 0, topSpeed: 739, carried: 'last-seen' }),
+    / follows=0 lock=none fixedOut=0 topSpeed=739 carried=last-seen$/);
+  assert.equal(diagFields(lib.dragDiagLine({ ...DIAG, carried: 'no' })).carried, 'no');
+  assert.doesNotMatch(lib.dragDiagLine(DIAG), /carried=/);
+  for (const carried of ['yes', 'press', '', true, 1]) assert.throws(() => lib.dragDiagLine({ ...DIAG, carried }), /^Error: dragDiagLine: bad carried/);
+});
+
+test('dragDiagLine: the agreed regex parses a full line, every later field in DRAG_EXTRAS order', () => {
+  const line = lib.dragDiagLine({ ...DIAG, end: 'release', anchor: 'link', key: 'link', refind: 'found:2',
+    follows: 3, lock: 'none', fixedOut: 1, topSpeed: 1250, carried: 'last-seen' });
+  const f = diagFields(line);
+  assert.deepEqual(Object.keys(f), ['end', 'protection', 'anchor', 'key', 'refind', 'pressed', 'moved', 'gap',
+    'selected', 'boxes', 'links', 'first', 'last', 'updates', 'slowest', 'scrollPause', 'rebuilds',
+    ...lib.DRAG_EXTRAS.map(([k]) => k)]);
+  assert.deepEqual([f.follows, f.lock, f.fixedOut, f.topSpeed, f.carried], ['3', 'none', '1', '1250', 'last-seen']);
 });
 
 test('autoScrollStep: both directions, always instant (brief 7b)', () => {
