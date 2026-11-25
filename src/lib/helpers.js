@@ -675,6 +675,7 @@
   // saved: 'busy' (another Snap Linkit dialog is open) or 'failed'.
   function carefulNotStartedMessage(reason, k) {
     const nothing = `Nothing was saved (0 of ${plural(k, 'item')}).`;
+    if (reason === 'saving') return `An earlier save is still running. Wait until it finishes, or reload the page, then drag again. ${nothing}`;
     return reason === 'busy'
       ? `Another Snap Linkit dialog is open. Close it and drag again. ${nothing}`
       : `Stopped: Snap Linkit couldn't open its confirm dialog. ${nothing}`;

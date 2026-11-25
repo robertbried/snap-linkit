@@ -871,6 +871,13 @@ test('carefulFallbackMessage: says how far the run got', () => {
   }
 });
 
+test('carefulNotStartedMessage: an earlier save is still running, so nothing was clicked (ultrareview #4)', () => {
+  assert.equal(lib.carefulNotStartedMessage('saving', 12),
+    'An earlier save is still running. Wait until it finishes, or reload the page, then drag again. Nothing was saved (0 of 12 items).');
+  assert.equal(lib.carefulNotStartedMessage('saving', 1),
+    'An earlier save is still running. Wait until it finishes, or reload the page, then drag again. Nothing was saved (0 of 1 item).');
+});
+
 test('carefulNotStartedMessage: the confirm could not be shown, so nothing was saved', () => {
   assert.equal(lib.carefulNotStartedMessage('busy', 35),
     'Another Snap Linkit dialog is open. Close it and drag again. Nothing was saved (0 of 35 items).');

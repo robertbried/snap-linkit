@@ -1454,6 +1454,12 @@
     showToast(carefulProgressMessage(run.i, run.k, run.ignoredDrag), { sticky: true });
   }
 
+  // Is any Fandom tracking box on the page still saving (an earlier save,
+  // possibly one that timed out)?
+  function trackedSaveInFlight() {
+    return Array.from(document.querySelectorAll(TRACKED_CHECKBOX_SELECTOR)).some((b) => isTrackedBox(b) && b.classList.contains(SAVING_CLASS));
+  }
+
   // Resolves 'done' once is-saving is gone, or 'timeout'. A result arriving
   // after the time-out is ignored: the observer is disconnected by then.
   function waitForSave(el, timeoutMs) {
@@ -1590,6 +1596,16 @@
       if (isDisabled(el)) pre.disabled++;
       else if (isChecked(el) === target) pre.already++;
       else queue.push(el);
+    }
+
+    // One save at a time, also after a time-out: a box whose save timed out may
+    // still be saving (Fandom's is-saving class), and a new run would put a
+    // second save in flight. While any tracking box on the page is saving, no
+    // run starts and nothing is clicked; the message says so (ultrareview #4).
+    if (queue.length > 0 && trackedSaveInFlight()) {
+      reportNotStarted('saving', queue.length, ordinaryDone);
+      clearSelection();
+      return;
     }
 
     // A careful run, then its message. `progress.stage` says how far it got,
