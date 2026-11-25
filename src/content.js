@@ -482,8 +482,15 @@
     return trackingLock({
       isTrackedBox: isTrackedBox(el),
       labelsTrackedBox: Boolean(label && label.control && isTrackedBox(label.control)),
-      cellHasTrackedBox: Boolean(cell) && Array.from(cell.querySelectorAll(TRACKED_CHECKBOX_SELECTOR)).some(isTrackedBox),
+      cellHasTrackedBox: Boolean(cell) && Boolean(trackedBoxOfCell(cell)),
     });
+  }
+
+  // The tracking box whose own cell this is (its nearest <td>), or null. A cell
+  // that only wraps a whole tracking table (a page laid out in a table) is not
+  // a tracking cell.
+  function trackedBoxOfCell(cell) {
+    return Array.from(cell.querySelectorAll(TRACKED_CHECKBOX_SELECTOR)).find((b) => isTrackedBox(b) && b.closest('td') === cell) || null;
   }
 
   // C: the nearest position: fixed element around el (crossing shadow roots), or null
@@ -575,7 +582,7 @@
   function diagPressedName(el) {
     if (!isElementNode(el) || diagTrackedBox(el) || typeof el.closest !== 'function') return diagName(el);
     const cell = el.closest('td');
-    const box = cell ? Array.from(cell.querySelectorAll(TRACKED_CHECKBOX_SELECTOR)).find(isTrackedBox) : null;
+    const box = cell ? trackedBoxOfCell(cell) : null;
     return box ? box.getAttribute('data-tpt-row-id') : diagName(el);
   }
 
