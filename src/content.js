@@ -251,10 +251,10 @@
     if (role && role !== 'checkbox' && role !== 'switch') return [];
     const labels = labelsOf(el);
     if (labels.length === 0) return [];
-    const stateOf = node => ({
-      hidden: isStyleHidden(window.getComputedStyle(node)),
-      rect: node.getBoundingClientRect()
-    });
+    const stateOf = node => {
+      const style = window.getComputedStyle(node);
+      return { hidden: isStyleHidden(style), displayNone: style.display === 'none', rect: node.getBoundingClientRect() };
+    };
     return proxyLabelIndexes(stateOf(el), labels.map(stateOf)).map(i => labels[i]);
   }
 

@@ -106,16 +106,22 @@
     return style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0';
   }
 
-  // Custom-styled checkboxes hide the real <input> (opacity 0,
-  // display none, visibility hidden or a 0x0 box) and draw the box on a
-  // <label> (issue #1). Given the input's state and its labels' states, return
-  // the indexes of the labels that stand in for it: the visible, non-empty
-  // ones. [] means the input is used as itself (it shows, or no label shows).
-  //   input   { hidden, rect: { width, height } }   hidden = isStyleHidden(style)
+  // Custom-styled checkboxes hide the real <input> (opacity 0, visibility
+  // hidden or a 0x0 box) and draw the box on a <label> (issue #1). Given the
+  // input's state and its labels' states, return the indexes of the labels
+  // that stand in for it: the visible, non-empty ones. [] means the input is
+  // used as itself (it shows, or no label stands in for it).
+  // An input with display: none gets no stand-ins (ultrareview 1, #3): that is
+  // how CSS-only toggles hide theirs (drawers, search buttons, collapsible nav
+  // sections, spoilers: a hidden checkbox driven by a visible <label for>), and
+  // a drag over their labels must not click them. Fandom's tracking boxes are
+  // opacity 0 and 0x0, not display none, so they keep their stand-ins.
+  //   input   { hidden, displayNone, rect: { width, height } }
+  //           hidden = isStyleHidden(style), displayNone = style.display === 'none'
   //   labels  [{ hidden, rect: { width, height } }]
   function proxyLabelIndexes(input, labels) {
     const shows = (s) => !s.hidden && s.rect.width > 0 && s.rect.height > 0;
-    if (shows(input)) return [];
+    if (shows(input) || input.displayNone === true) return [];
     const out = [];
     labels.forEach((label, i) => { if (shows(label)) out.push(i); });
     return out;

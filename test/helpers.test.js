@@ -739,6 +739,21 @@ test('isStyleHidden: display none, visibility hidden or opacity 0 draw nothing',
   assert.equal(lib.isStyleHidden({ ...base, opacity: '0.5' }), false);
 });
 
+test('proxyLabelIndexes: an input with display: none gets no stand-ins (ultrareview 1, #3: CSS-only toggles)', () => {
+  const rect = (w, h) => ({ width: w, height: h });
+  const label = { hidden: false, rect: rect(84, 37) };
+  // a drawer or nav toggle: <input display:none> + visible <label for>
+  assert.deepEqual(lib.proxyLabelIndexes({ hidden: true, displayNone: true, rect: rect(0, 0) }, [label]), []);
+  // Fandom's tracking box: opacity 0, 0x0, display block: its label still stands in
+  assert.deepEqual(lib.proxyLabelIndexes({ hidden: true, displayNone: false, rect: rect(0, 0) }, [label]), [0]);
+  // an accordion hidden the accessible way (opacity 0, 1x1): still stood in for
+  assert.deepEqual(lib.proxyLabelIndexes({ hidden: true, displayNone: false, rect: rect(1, 1) }, [label]), [0]);
+  // no displayNone fact (older callers): as before
+  assert.deepEqual(lib.proxyLabelIndexes({ hidden: true, rect: rect(0, 0) }, [label]), [0]);
+  // only a real true counts
+  assert.deepEqual(lib.proxyLabelIndexes({ hidden: true, displayNone: 'yes', rect: rect(0, 0) }, [label]), [0]);
+});
+
 test('proxyLabelIndexes: a hidden checkbox is stood in for by its visible labels (issue #1)', () => {
   const box = (w, h, hidden = false) => ({ hidden, rect: { width: w, height: h } });
   // Fandom progress table: input opacity 0 and 0x0, empty <label for> filling the cell
