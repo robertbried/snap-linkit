@@ -91,11 +91,6 @@ function writeZip(zipPath, baseDir, files) {
   fs.writeFileSync(zipPath, Buffer.concat([...local, cd, end]));
 }
 
-/**
- * Build one target into <outDir>/<target>/ and <outDir>/snap_linkit-<target>-<version>.zip.
- * Returns { target, dir, zip, version, files, sha256 }. Throws on any problem (a failed build may leave a
- * partial <outDir>/<target>/; the next build deletes and rebuilds it).
- */
 // Test builds: the one line of content.js that turns the per-save console line on. Must occur exactly once.
 const SAVE_LOG_OFF = 'const SAVE_LOG = false;';
 const SAVE_LOG_ON = 'const SAVE_LOG = true; ';
@@ -109,6 +104,17 @@ function switchOn(text, off, on, what) {
   return text.replace(off, on);
 }
 
+/**
+ * Build one target into <outDir>/<target>/ and <outDir>/snap_linkit-<target>-<version><suffix>.zip.
+ * Options:
+ *   {}                (default) the store build, no suffix: content.js exactly as in src/;
+ *   { test: true }    a test build, suffix -test: SAVE_LOG on (one diagnostic console line per save and per drag);
+ *   { test: true, faults: true }
+ *                     a lab build, suffix -lab: the test build with failure injection on (FAULTS). `faults`
+ *                     without `test` throws.
+ * Returns { target, dir, zip, version, files, sha256 }. Throws on any problem (a failed build may leave a
+ * partial <outDir>/<target>/; the next build deletes and rebuilds it).
+ */
 export function buildTarget(target, outDir = path.join(ROOT, 'dist'), { test = false, faults = false } = {}) {
   if (faults && !test) throw new Error('build: a fault-injection build is also a test build');
   if (!(target in OVERLAYS)) throw new Error(`build: unknown target "${target}" (firefox or chrome)`);
