@@ -10,7 +10,7 @@
   const {
     isOpenableUrl, matchesPattern, rectsIntersect, rectFromPoints, dragStartPoint,
     uniqueMatch, firstUsableAnchor, dragPageChangedMessage, dragStartFailedMessage, DRAG_OFF_REASONS, dragDiagLine, TRACKED_CHECKBOX_SELECTOR,
-    dragFollowNeeded, trackingLock, fixedContainerAllows, anchorLostOutcome,
+    dragFollowNeeded, trackingLock, fixedContainerAllows, anchorLostOutcome, releaseAfterCarryOn,
     autoScrollStep, autoScrollZone, autoScrollRate, autoScrollDelta, clampToArea, liveCountText,
     isDownloadableUrl, majorityShouldCheck, plural, fitMenuAxis, clampMenuAxis,
     normalizeReleaseAction, dragModifierMode, isStyleHidden, proxyLabelIndexes,
@@ -72,6 +72,8 @@
     pressEl: null,       // the element pressed (not brief 5b's fallback anchor): the fixed-container rule (C)
     lastSeen: null,      // { x, y }: the start's page position at the last update while it had an anchor; after the
                          // pressed element is lost for good, the drag carries on from here (ultrareview 1, #1)
+    carried: false,      // this drag carried on after losing its pressed element: its release may not save
+                         // tracking boxes (releaseAfterCarryOn). Set in refreshDragAnchor, reset at the press only.
   };
 
   // Extension active state (can be disabled via blacklist)
@@ -544,6 +546,18 @@
   // replaced it, find it again by its key; when that isn't possible, cancel
   // the drag and say so on screen (nothing is clicked, opened or saved; the
   // browser menu stays blocked on the release). false = cancelled.
+  // Would this release toggle tracking boxes after the drag carried on?
+  function carriedReleaseRefused() {
+    if (!state.carried) return false;
+    let links = 0;
+    let trackedBoxes = 0;
+    for (const el of state.selectedElements) {
+      if (el instanceof HTMLAnchorElement) links++;
+      else if (isTrackedBox(el)) trackedBoxes++;
+    }
+    return releaseAfterCarryOn({ carried: state.carried, links, trackedBoxes }) === 'refuse';
+  }
+
   function refreshDragAnchor() {
     const a = state.anchor;
     if (!a || anchorBox(a.el)) return true;
@@ -558,6 +572,7 @@
     // element was last seen (state.lastSeen, kept by getSelectionRect)
     if (anchorLostOutcome({ trackLock: state.trackLock }) === 'carry-on') {
       state.anchor = null;
+      state.carried = true;
       if (SAVE_LOG && dragDiag) dragDiag.carried = true;
       return true;
     }
@@ -2086,6 +2101,7 @@
     state.pressFailed = pressFailed;
     state.anchor = anchor;
     state.lastSeen = null;
+    state.carried = false;
     state.trackLock = trackLock;
     state.pressEl = pressEl;
     state.startX = e.clientX;
@@ -2176,6 +2192,14 @@
       flushDragFollow();
       if (!state.isSelecting) return;
       recheckSelectionAtRelease(); // before the line, so selected= is what's acted on
+      // A drag that carried on may not save tracking boxes: nothing is clicked
+      // (the line says end=page-changed carried=last-seen). A save run already
+      // going keeps its own "new drag ignored" message instead.
+      if (!carefulRun && carriedReleaseRefused()) {
+        cancelSelection('page-changed');
+        showToastOrLog(dragPageChangedMessage(), { sticky: true });
+        return;
+      }
     }
     if (SAVE_LOG && wasDragging && dragDiag && dragDiag.started) diagWrite('release');
     endDragCache();

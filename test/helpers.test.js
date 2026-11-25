@@ -11,7 +11,7 @@ test('SnapLinkitLib exposes every helper and is frozen', () => {
     'carefulProgressMessage', 'carefulFallbackMessage', 'carefulNotStartedMessage', 'clampMenuAxis', 'faultMatches', 'dragModifierMode', 'filenameFromUrl', 'fitMenuAxis', 'formatDurationEstimate', 'formatShortcut',
     'isDownloadableUrl', 'isOpenableUrl', 'isStyleHidden', 'isTrackedCheckbox', 'isValidPattern', 'isVersionBefore', 'majorityShouldCheck',
     'matchesPattern', 'normalizeReleaseAction', 'ordinaryCheckboxMessage', 'ordinaryUnreadMessage', 'plural',
-    'proxyLabelIndexes', 'rectsIntersect', 'selectionRect', 'rectFromPoints', 'dragStartPoint', 'uniqueMatch', 'firstUsableAnchor', 'dragPageChangedMessage', 'dragStartFailedMessage', 'DRAG_OFF_REASONS', 'DRAG_ENDS', 'dragDiagName', 'dragDiagPx', 'dragDiagLine', 'DRAG_EXTRAS', 'anchorLostOutcome', 'dragFollowNeeded', 'trackingLock', 'fixedContainerAllows', 'autoScrollStep', 'autoScrollZone', 'AUTO_SCROLL_CREEP', 'AUTO_SCROLL_CAP', 'autoScrollRate', 'autoScrollDelta', 'clampToArea', 'liveCountText', 'selectableVerdict', 'labelMapFrom', 'touchesSelection', 'onlyOwnClassChange', 'pageChangeMarksStale', 'shouldOfferWhatsNew', 'whatsNewLines', 'whatsNewRecord', 'whatsNewShowsShortcuts',
+    'proxyLabelIndexes', 'rectsIntersect', 'selectionRect', 'rectFromPoints', 'dragStartPoint', 'uniqueMatch', 'firstUsableAnchor', 'dragPageChangedMessage', 'dragStartFailedMessage', 'DRAG_OFF_REASONS', 'DRAG_ENDS', 'dragDiagName', 'dragDiagPx', 'dragDiagLine', 'DRAG_EXTRAS', 'anchorLostOutcome', 'releaseAfterCarryOn', 'dragFollowNeeded', 'trackingLock', 'fixedContainerAllows', 'autoScrollStep', 'autoScrollZone', 'AUTO_SCROLL_CREEP', 'AUTO_SCROLL_CAP', 'autoScrollRate', 'autoScrollDelta', 'clampToArea', 'liveCountText', 'selectableVerdict', 'labelMapFrom', 'touchesSelection', 'onlyOwnClassChange', 'pageChangeMarksStale', 'shouldOfferWhatsNew', 'whatsNewLines', 'whatsNewRecord', 'whatsNewShowsShortcuts',
   ].sort());
   assert.ok(Object.isFrozen(lib));
   assert.equal(globalThis.SnapLinkitLib, lib);
@@ -376,6 +376,20 @@ test('anchorLostOutcome (ultrareview 1, #1): only a drag locked to tracking boxe
   assert.equal(lib.anchorLostOutcome({}), 'carry-on');
   assert.equal(lib.anchorLostOutcome(null), 'carry-on');
   assert.equal(lib.anchorLostOutcome({ trackLock: 'yes' }), 'carry-on'); // only a real true locks
+});
+
+test('releaseAfterCarryOn: a drag that carried on may not save tracking boxes; links still win (ultrareview 1, #1)', () => {
+  // carried on, tracking boxes, no links: refused (nothing is clicked)
+  assert.equal(lib.releaseAfterCarryOn({ carried: true, links: 0, trackedBoxes: 10 }), 'refuse');
+  // links in the selection: the release opens them and leaves the boxes alone, as always
+  assert.equal(lib.releaseAfterCarryOn({ carried: true, links: 3, trackedBoxes: 10 }), 'act');
+  // didn't carry on: the release acts
+  assert.equal(lib.releaseAfterCarryOn({ carried: false, links: 0, trackedBoxes: 10 }), 'act');
+  // no tracking boxes (ordinary boxes or nothing): acts
+  assert.equal(lib.releaseAfterCarryOn({ carried: true, links: 0, trackedBoxes: 0 }), 'act');
+  // only a real true counts as carried on
+  assert.equal(lib.releaseAfterCarryOn({ carried: 'yes', links: 0, trackedBoxes: 10 }), 'act');
+  assert.equal(lib.releaseAfterCarryOn(null), 'act');
 });
 
 test('dragDiagLine: carried=no|last-seen, the last field (ultrareview 1, #1)', () => {

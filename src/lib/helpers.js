@@ -311,6 +311,20 @@
     return f && f.trackLock === true ? 'cancel' : 'carry-on';
   }
 
+  // At release, for a drag that carried on after losing its pressed element:
+  // its start is no longer tied to what was pressed, so it may not save Fandom
+  // tracking boxes (ultrareview 1, #1, the gap left by anchorLostOutcome).
+  //   'refuse'  it carried on and its release would toggle tracking boxes (it
+  //             holds tracking boxes and no links): nothing is clicked, and
+  //             "The page changed under the drag; drag again." is shown
+  //   'act'     anything else (a release with links opens them and leaves the
+  //             boxes alone, as always)
+  //   { carried, links, trackedBoxes }   carried: the drag carried on; links,
+  //                                      trackedBoxes: counts in the selection
+  function releaseAfterCarryOn(f) {
+    return f && f.carried === true && !(f.links > 0) && f.trackedBoxes > 0 ? 'refuse' : 'act';
+  }
+
   // C: may an element inside a position: fixed container be selected? Plain
   // facts: { inFixed: it sits inside a fixed container, pressedInside: the
   // drag was pressed inside that same container }. Fixed headers, side bars
@@ -841,6 +855,7 @@
     dragDiagLine,
     DRAG_EXTRAS,
     anchorLostOutcome,
+    releaseAfterCarryOn,
     dragFollowNeeded,
     autoScrollStep,
     autoScrollZone,
