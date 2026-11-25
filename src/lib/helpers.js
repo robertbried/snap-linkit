@@ -277,10 +277,22 @@
   // The drag line's later fields, in order: [name, 'count' or the allowed values].
   //   follows: updates made because the page scrolled under the held drag (A1)
   //   lock: "tracking" when the drag selects only Fandom tracking boxes (B)
+  //   fixedOut: elements left out because they sit in a fixed container the drag wasn't pressed in (C)
   const DRAG_EXTRAS = Object.freeze([
     ['follows', 'count'],
     ['lock', ['tracking', 'none']],
+    ['fixedOut', 'count'],
   ].map(Object.freeze));
+
+  // C: may an element inside a position: fixed container be selected? Plain
+  // facts: { inFixed: it sits inside a fixed container, pressedInside: the
+  // drag was pressed inside that same container }. Fixed headers, side bars
+  // and pop-ups stay put while the page scrolls, so a long drag's box comes to
+  // cover them without the user meaning to; a drag made inside one still
+  // selects its own links. Sticky elements are not affected.
+  function fixedContainerAllows(f) {
+    return !f || f.inFixed !== true || f.pressedInside === true;
+  }
 
   // B: does a drag pressed here select only Fandom tracking boxes? Plain facts
   // about the element pressed: { isTrackedBox: it is the box itself,
@@ -737,6 +749,7 @@
     DRAG_EXTRAS,
     dragFollowNeeded,
     trackingLock,
+    fixedContainerAllows,
     selectableVerdict,
     labelMapFrom,
     touchesSelection,

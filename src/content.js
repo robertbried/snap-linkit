@@ -10,7 +10,7 @@
   const {
     isOpenableUrl, matchesPattern, rectsIntersect, rectFromPoints, dragStartPoint,
     uniqueMatch, firstUsableAnchor, dragPageChangedMessage, dragStartFailedMessage, DRAG_OFF_REASONS, dragDiagLine, TRACKED_CHECKBOX_SELECTOR,
-    dragFollowNeeded, trackingLock,
+    dragFollowNeeded, trackingLock, fixedContainerAllows,
     isDownloadableUrl, majorityShouldCheck, plural, fitMenuAxis, clampMenuAxis,
     normalizeReleaseAction, dragModifierMode, isStyleHidden, proxyLabelIndexes,
     TRACKED_TABLE_SELECTOR, isTrackedCheckbox, afterClickOutcome, ordinaryCheckboxMessage,
@@ -68,6 +68,7 @@
     anchor: null,        // { el, offX, offY, key, root }: the element pressed (brief 3); null = old maths
     pressFailed: false,  // choosing the anchor threw at the press: a drag from it is cancelled (brief 5)
     trackLock: false,    // pressed in a Fandom tracking cell: the drag selects only tracking boxes (B)
+    pressEl: null,       // the element pressed (not brief 5b's fallback anchor): the fixed-container rule (C)
   };
 
   // Extension active state (can be disabled via blacklist)
@@ -482,6 +483,31 @@
     });
   }
 
+  // C: the nearest position: fixed element around el (crossing shadow roots), or null
+  function nearestFixed(el) {
+    for (let n = el; isElementNode(n); n = n.parentElement || (typeof n.getRootNode === 'function' && n.getRootNode().host) || null) {
+      if (window.getComputedStyle(n).position === 'fixed') return n;
+    }
+    return null;
+  }
+
+  // Is el inside container (crossing shadow roots)?
+  function isInsideComposed(container, el) {
+    for (let n = el; n; n = n.parentElement || (typeof n.getRootNode === 'function' && n.getRootNode().host) || null) {
+      if (n === container) return true;
+    }
+    return false;
+  }
+
+  // C: an element in a fixed container is selectable only when the drag was
+  // pressed inside that same container (judged from the element pressed)
+  function fixedRuleAllows(el) {
+    const box = nearestFixed(el);
+    const ok = fixedContainerAllows({ inFixed: Boolean(box), pressedInside: Boolean(box) && isElementNode(state.pressEl) && isInsideComposed(box, state.pressEl) });
+    if (!ok && SAVE_LOG && dragDiag) dragDiag.fixedOut.add(el);
+    return ok;
+  }
+
   // The drag's candidates: everything selectable, or only Fandom's tracking
   // boxes on a drag pressed in a tracking cell (B). Normal pages are unchanged.
   function candidateList() {
@@ -566,7 +592,7 @@
       const el = isElementNode(e.target) ? e.target : null;
       dragDiag = { started: false, protection: 'off:' + DRAG_OFF_REASONS.threw, anchor: 'none', key: 'none',
         refinds: 0, refindCancelled: false, el: null, pressed: el ? diagPressedName(el) : null, pressPageY: null,
-        offY: null, updates: 0, slowest: 0, scrollPause: 0, lastScrollUpdate: null, lastStartPageY: null, follows: 0 };
+        offY: null, updates: 0, slowest: 0, scrollPause: 0, lastScrollUpdate: null, lastStartPageY: null, follows: 0, fixedOut: new Set() };
       if (el) diagPlace(dragDiag, el, e.clientY);
     } catch (error) {
       dragDiag = null;
@@ -651,6 +677,7 @@
         rebuilds: dragCache ? dragCache.rebuilds : 0,
         follows: rec.follows,
         lock: state.trackLock ? 'tracking' : 'none',
+        fixedOut: rec.fixedOut.size,
       }));
     } catch (error) {
       diagFailed(error);
@@ -1669,7 +1696,7 @@
       // drag
       const labelRects = () => (el instanceof HTMLInputElement && el.type === 'checkbox' ? labelsOf(el).map(getElementRect) : []);
       if (!touchesSelection(selRect, getElementRect(el), labelRects)) continue;
-      if (!c.verdicts.has(el)) c.verdicts.set(el, isSelectableElement(el));
+      if (!c.verdicts.has(el)) c.verdicts.set(el, isSelectableElement(el) && fixedRuleAllows(el));
       if (!c.verdicts.get(el)) continue;
       const proxies = proxyLabels(el);
       const rects = proxies.length > 0 ? proxies.map(getElementRect) : [getElementRect(el)];
@@ -1677,6 +1704,7 @@
         currentlyInLasso.add(el);
       }
     }
+    c.inLasso = currentlyInLasso;
 
     // Apply modifier logic
     if (state.modifierMode === 'add') {
@@ -1717,8 +1745,11 @@
     if (dragCache) { dragCache.proxies = new Map(); dragCache.labelMap = null; }
     proxyCache = dragCache ? dragCache.proxies : null;
     try {
+      const inLasso = dragCache && dragCache.inLasso ? dragCache.inLasso : new Set();
       for (const el of Array.from(state.selectedElements)) {
-        if (isSelectableElement(el)) continue;
+        // C applies to what this drag's box holds; an earlier Ctrl drag's
+        // elements keep their own press's verdict
+        if (isSelectableElement(el) && (!inLasso.has(el) || fixedRuleAllows(el))) continue;
         state.selectedElements.delete(el);
         el.classList.remove('snaplinkit-highlighted');
         labelsOf(el).forEach((l) => l.classList.remove('snaplinkit-highlighted'));
@@ -1935,9 +1966,11 @@
     let anchor = null;
     let pressFailed = false;
     let trackLock = false;
+    let pressEl = null;
     try {
       anchor = pickDragAnchor(e);
-      trackLock = pressInTrackingCell(pressedElement(e));
+      pressEl = pressedElement(e);
+      trackLock = pressInTrackingCell(pressEl);
     } catch (error) {
       pressFailed = true;
       console.error(`[Snap Linkit] Could not start the selection: ${error && error.message ? error.message : String(error)}`, error);
@@ -1952,6 +1985,7 @@
     state.pressFailed = pressFailed;
     state.anchor = anchor;
     state.trackLock = trackLock;
+    state.pressEl = pressEl;
     state.startX = e.clientX;
     state.startY = e.clientY;
     state.startScrollX = window.scrollX;

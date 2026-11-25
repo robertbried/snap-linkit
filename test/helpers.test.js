@@ -11,7 +11,7 @@ test('SnapLinkitLib exposes every helper and is frozen', () => {
     'carefulProgressMessage', 'carefulFallbackMessage', 'carefulNotStartedMessage', 'clampMenuAxis', 'faultMatches', 'dragModifierMode', 'filenameFromUrl', 'fitMenuAxis', 'formatDurationEstimate', 'formatShortcut',
     'isDownloadableUrl', 'isOpenableUrl', 'isStyleHidden', 'isTrackedCheckbox', 'isValidPattern', 'isVersionBefore', 'majorityShouldCheck',
     'matchesPattern', 'normalizeReleaseAction', 'ordinaryCheckboxMessage', 'ordinaryUnreadMessage', 'plural',
-    'proxyLabelIndexes', 'rectsIntersect', 'selectionRect', 'rectFromPoints', 'dragStartPoint', 'uniqueMatch', 'firstUsableAnchor', 'dragPageChangedMessage', 'dragStartFailedMessage', 'DRAG_OFF_REASONS', 'DRAG_ENDS', 'dragDiagName', 'dragDiagPx', 'dragDiagLine', 'DRAG_EXTRAS', 'dragFollowNeeded', 'trackingLock', 'selectableVerdict', 'labelMapFrom', 'touchesSelection', 'onlyOwnClassChange', 'pageChangeMarksStale', 'shouldOfferWhatsNew', 'whatsNewLines', 'whatsNewRecord', 'whatsNewShowsShortcuts',
+    'proxyLabelIndexes', 'rectsIntersect', 'selectionRect', 'rectFromPoints', 'dragStartPoint', 'uniqueMatch', 'firstUsableAnchor', 'dragPageChangedMessage', 'dragStartFailedMessage', 'DRAG_OFF_REASONS', 'DRAG_ENDS', 'dragDiagName', 'dragDiagPx', 'dragDiagLine', 'DRAG_EXTRAS', 'dragFollowNeeded', 'trackingLock', 'fixedContainerAllows', 'selectableVerdict', 'labelMapFrom', 'touchesSelection', 'onlyOwnClassChange', 'pageChangeMarksStale', 'shouldOfferWhatsNew', 'whatsNewLines', 'whatsNewRecord', 'whatsNewShowsShortcuts',
   ].sort());
   assert.ok(Object.isFrozen(lib));
   assert.equal(globalThis.SnapLinkitLib, lib);
@@ -354,6 +354,20 @@ test('dragDiagLine: lock=tracking|none after follows (B)', () => {
   assert.match(lib.dragDiagLine({ ...DIAG, follows: 2, lock: 'tracking' }), / rebuilds=0 follows=2 lock=tracking$/);
   assert.equal(diagFields(lib.dragDiagLine({ ...DIAG, follows: 0, lock: 'none' })).lock, 'none');
   for (const lock of ['yes', '', true]) assert.throws(() => lib.dragDiagLine({ ...DIAG, lock }), /^Error: dragDiagLine: bad lock/);
+});
+
+test('fixedContainerAllows (C): an element in a fixed container only when the drag was pressed inside it', () => {
+  assert.equal(lib.fixedContainerAllows({ inFixed: false, pressedInside: false }), true);
+  assert.equal(lib.fixedContainerAllows({ inFixed: true, pressedInside: true }), true);
+  assert.equal(lib.fixedContainerAllows({ inFixed: true, pressedInside: false }), false);
+  assert.equal(lib.fixedContainerAllows({ inFixed: true }), false);
+  assert.equal(lib.fixedContainerAllows(null), true);
+});
+
+test('dragDiagLine: fixedOut after lock (C)', () => {
+  assert.deepEqual(lib.DRAG_EXTRAS.map(([k]) => k), ['follows', 'lock', 'fixedOut']);
+  assert.match(lib.dragDiagLine({ ...DIAG, follows: 0, lock: 'none', fixedOut: 2 }), / follows=0 lock=none fixedOut=2$/);
+  assert.throws(() => lib.dragDiagLine({ ...DIAG, fixedOut: -1 }), /^Error: dragDiagLine: bad fixedOut/);
 });
 
 test('dragDiagLine: rebuilds, the last field (brief 7)', () => {
