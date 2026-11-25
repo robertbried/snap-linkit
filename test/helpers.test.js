@@ -11,7 +11,7 @@ test('SnapLinkitLib exposes every helper and is frozen', () => {
     'carefulProgressMessage', 'carefulFallbackMessage', 'carefulNotStartedMessage', 'clampMenuAxis', 'faultMatches', 'dragModifierMode', 'filenameFromUrl', 'fitMenuAxis', 'formatDurationEstimate', 'formatShortcut',
     'isDownloadableUrl', 'isOpenableUrl', 'isStyleHidden', 'isTrackedCheckbox', 'isValidPattern', 'isVersionBefore', 'majorityShouldCheck',
     'matchesPattern', 'normalizeReleaseAction', 'ordinaryCheckboxMessage', 'ordinaryUnreadMessage', 'plural',
-    'proxyLabelIndexes', 'rectsIntersect', 'selectionRect', 'rectFromPoints', 'dragStartPoint', 'uniqueMatch', 'firstUsableAnchor', 'dragPageChangedMessage', 'dragStartFailedMessage', 'DRAG_OFF_REASONS', 'DRAG_ENDS', 'dragDiagName', 'dragDiagPx', 'dragDiagLine', 'selectableVerdict', 'labelMapFrom', 'touchesSelection', 'onlyOwnClassChange', 'pageChangeMarksStale', 'shouldOfferWhatsNew', 'whatsNewLines', 'whatsNewRecord', 'whatsNewShowsShortcuts',
+    'proxyLabelIndexes', 'rectsIntersect', 'selectionRect', 'rectFromPoints', 'dragStartPoint', 'uniqueMatch', 'firstUsableAnchor', 'dragPageChangedMessage', 'dragStartFailedMessage', 'DRAG_OFF_REASONS', 'DRAG_ENDS', 'dragDiagName', 'dragDiagPx', 'dragDiagLine', 'DRAG_EXTRAS', 'dragFollowNeeded', 'selectableVerdict', 'labelMapFrom', 'touchesSelection', 'onlyOwnClassChange', 'pageChangeMarksStale', 'shouldOfferWhatsNew', 'whatsNewLines', 'whatsNewRecord', 'whatsNewShowsShortcuts',
   ].sort());
   assert.ok(Object.isFrozen(lib));
   assert.equal(globalThis.SnapLinkitLib, lib);
@@ -321,6 +321,23 @@ test('dragDiagLine: the agreed regex parses every field, in the fixed order', ()
   assert.deepEqual(Object.keys(diagFields(line)), ['end', 'protection', 'anchor', 'key', 'refind', 'pressed', 'moved', 'gap',
     'selected', 'boxes', 'links', 'first', 'last', 'updates', 'slowest', 'scrollPause', 'rebuilds']);
   assert.equal(diagFields(line).pressed, '"Master \'Support\'"');
+});
+
+test('dragDiagLine: later fields only when passed, in DRAG_EXTRAS order (A1: follows)', () => {
+  assert.deepEqual(lib.DRAG_EXTRAS.map(([k]) => k).slice(0, 1), ['follows']);
+  assert.ok(Object.isFrozen(lib.DRAG_EXTRAS));
+  assert.doesNotMatch(lib.dragDiagLine(DIAG), /follows=/);
+  assert.match(lib.dragDiagLine({ ...DIAG, follows: 0 }), / rebuilds=0 follows=0$/);
+  assert.equal(diagFields(lib.dragDiagLine({ ...DIAG, follows: 12 })).follows, '12');
+  for (const follows of [-1, 1.5, null, 'x']) assert.throws(() => lib.dragDiagLine({ ...DIAG, follows }), /^Error: dragDiagLine: bad follows/);
+});
+
+test('dragFollowNeeded (A1): a new update when the window scrolled since the last one, or a box inside the page did', () => {
+  assert.equal(lib.dragFollowNeeded({ x: 0, y: 100 }, { x: 0, y: 100 }, false), false);
+  assert.equal(lib.dragFollowNeeded({ x: 0, y: 100 }, { x: 0, y: 400 }, false), true);
+  assert.equal(lib.dragFollowNeeded({ x: 0, y: 100 }, { x: 30, y: 100 }, false), true);
+  assert.equal(lib.dragFollowNeeded({ x: 0, y: 100 }, { x: 0, y: 100 }, true), true);
+  assert.equal(lib.dragFollowNeeded(null, { x: 0, y: 0 }, false), true);
 });
 
 test('dragDiagLine: rebuilds, the last field (brief 7)', () => {

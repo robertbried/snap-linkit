@@ -10,6 +10,7 @@
   const {
     isOpenableUrl, matchesPattern, rectsIntersect, rectFromPoints, dragStartPoint,
     uniqueMatch, firstUsableAnchor, dragPageChangedMessage, dragStartFailedMessage, DRAG_OFF_REASONS, dragDiagLine, TRACKED_CHECKBOX_SELECTOR,
+    dragFollowNeeded,
     isDownloadableUrl, majorityShouldCheck, plural, fitMenuAxis, clampMenuAxis,
     normalizeReleaseAction, dragModifierMode, isStyleHidden, proxyLabelIndexes,
     TRACKED_TABLE_SELECTOR, isTrackedCheckbox, afterClickOutcome, ordinaryCheckboxMessage,
@@ -537,7 +538,7 @@
       const el = isElementNode(e.target) ? e.target : null;
       dragDiag = { started: false, protection: 'off:' + DRAG_OFF_REASONS.threw, anchor: 'none', key: 'none',
         refinds: 0, refindCancelled: false, el: null, pressed: el ? diagPressedName(el) : null, pressPageY: null,
-        offY: null, updates: 0, slowest: 0, scrollPause: 0, lastScrollUpdate: null, lastStartPageY: null };
+        offY: null, updates: 0, slowest: 0, scrollPause: 0, lastScrollUpdate: null, lastStartPageY: null, follows: 0 };
       if (el) diagPlace(dragDiag, el, e.clientY);
     } catch (error) {
       dragDiag = null;
@@ -620,6 +621,7 @@
         first: sel.length ? diagName(sel[0]) : null, last: sel.length ? diagName(sel[sel.length - 1]) : null,
         updates: rec.updates, slowest: rec.slowest, scrollPause: rec.scrollPause,
         rebuilds: dragCache ? dragCache.rebuilds : 0,
+        follows: rec.follows,
       }));
     } catch (error) {
       diagFailed(error);
@@ -1718,10 +1720,100 @@
     state.isDragging = false;
     state.anchor = null;
     stopAutoScroll();
+    stopDragFollow();
     if (lassoEl) lassoEl.style.display = 'none';
     document.body.classList.remove('snaplinkit-selecting');
     clearSelection();
     hideMenu();
+  }
+
+  // ============================================
+  // FOLLOWING SCROLLS DURING A DRAG (A1)
+  // ============================================
+  // The page can scroll under a held drag with the pointer still: the mouse
+  // wheel, the keyboard, the page's own scripts, a scrolling box inside the
+  // page. Every scroll asks for one update in the next frame (at most one per
+  // frame, whatever asked; an auto-scroll step updates on its own). Each update
+  // refreshes the brief 3 anchor first. A release applies a pending update
+  // first, so it acts on what is under the box now. The listener and any
+  // pending frame go when the drag ends, however it ends.
+  let dragFollow = null; // { onScroll, frame, timer, inner, last: { x, y } } while a drag is active
+
+  function startDragFollow() {
+    stopDragFollow();
+    const f = { onScroll: null, frame: null, timer: null, inner: false, last: { x: window.scrollX, y: window.scrollY } };
+    f.onScroll = (e) => {
+      // The page's own scroll is fired at the document; any other target is a
+      // scrolling box inside the page, which moves its contents but not the
+      // window's scroll position
+      const t = e && e.target;
+      if (t && t !== document && t !== document.documentElement && t !== document.scrollingElement) f.inner = true;
+      scheduleDragFollow();
+    };
+    window.addEventListener('scroll', f.onScroll, { capture: true, passive: true });
+    dragFollow = f;
+  }
+
+  function cancelDragFollowFrame(f) {
+    if (f.frame !== null && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(f.frame);
+    if (f.timer !== null) clearTimeout(f.timer);
+    f.frame = null;
+    f.timer = null;
+  }
+
+  function stopDragFollow() {
+    if (!dragFollow) return;
+    cancelDragFollowFrame(dragFollow);
+    window.removeEventListener('scroll', dragFollow.onScroll, { capture: true });
+    dragFollow = null;
+  }
+
+  // At most one pending update: the next animation frame, or a frame's time
+  // where frames don't run
+  function scheduleDragFollow() {
+    const f = dragFollow;
+    if (!f || f.frame !== null || f.timer !== null) return;
+    if (typeof requestAnimationFrame === 'function') f.frame = requestAnimationFrame(runDragFollow);
+    else f.timer = setTimeout(runDragFollow, FRAME_INTERVAL);
+  }
+
+  function runDragFollow() {
+    const f = dragFollow;
+    if (!f) return;
+    f.frame = null;
+    f.timer = null;
+    if (!state.isDragging) return;
+    if (!dragFollowNeeded(f.last, { x: window.scrollX, y: window.scrollY }, f.inner)) return;
+    if (SAVE_LOG && dragDiag) dragDiag.follows++;
+    dragUpdate();
+  }
+
+  // At release: whatever a pending frame would have applied, now, including a
+  // scroll whose event hasn't fired yet (its position is already current)
+  function flushDragFollow() {
+    const f = dragFollow;
+    if (!f || !state.isDragging) return;
+    cancelDragFollowFrame(f);
+    if (!dragFollowNeeded(f.last, { x: window.scrollX, y: window.scrollY }, f.inner)) return;
+    if (SAVE_LOG && dragDiag) dragDiag.follows++;
+    dragUpdate();
+  }
+
+  // One update of the box and the selection, the anchor first (refreshing it
+  // can cancel the drag: false)
+  function dragUpdate() {
+    if (!refreshDragAnchor()) return false;
+    updateLassoAndSelection();
+    return true;
+  }
+
+  function updateLassoAndSelection() {
+    updateLasso();
+    updateSelection();
+    if (dragFollow) {
+      dragFollow.last = { x: window.scrollX, y: window.scrollY };
+      dragFollow.inner = false;
+    }
   }
 
   // ============================================
@@ -1762,8 +1854,7 @@
         // pressed element (or the scroll delta when there is no anchor)
         if (!refreshDragAnchor()) return;
         if (SAVE_LOG && dragDiag) diagScrollUpdate();
-        updateLasso();
-        updateSelection();
+        updateLassoAndSelection();
       } else if (SAVE_LOG && dragDiag) {
         dragDiag.lastScrollUpdate = null; // the pointer left the edge strip: the next stretch starts fresh
       }
@@ -1811,6 +1902,7 @@
     // drag, onMouseMove cancels it and says so; a plain right-click stays one.
     if (SAVE_LOG) diagPress(e); // test builds: the drag line's record ("off:threw" until pickDragAnchor returns)
     endDragCache(); // a press with no release in between ends the previous drag's cache (after its line)
+    stopDragFollow(); // ... and its scroll listener (A1)
     let anchor = null;
     let pressFailed = false;
     try {
@@ -1895,14 +1987,13 @@
 
       document.body.classList.add('snaplinkit-selecting');
       startAutoScroll();
+      startDragFollow(); // A1: the selection follows any scroll from here on
 
       // Now prevent default to stop text selection during drag
       e.preventDefault();
     }
 
-    if (!refreshDragAnchor()) return;
-    updateLasso();
-    updateSelection();
+    dragUpdate();
   }
 
   function onMouseUp(e) {
@@ -1910,13 +2001,21 @@
     if (e.button !== 2) return; // Right-click release
 
     const wasDragging = state.isDragging;
-    if (wasDragging) recheckSelectionAtRelease(); // before the line, so selected= is what's acted on
+    if (wasDragging) {
+      // A1: a scroll the last update hasn't seen yet is applied first, so the
+      // release acts on what is under the box now. Refreshing the anchor can
+      // cancel the drag (the pressed element left the page): nothing to act on.
+      flushDragFollow();
+      if (!state.isSelecting) return;
+      recheckSelectionAtRelease(); // before the line, so selected= is what's acted on
+    }
     if (SAVE_LOG && wasDragging && dragDiag && dragDiag.started) diagWrite('release');
     endDragCache();
     state.isSelecting = false;
     state.isDragging = false;
     state.anchor = null;
     stopAutoScroll();
+    stopDragFollow();
 
     if (lassoEl) lassoEl.style.display = 'none';
     document.body.classList.remove('snaplinkit-selecting');

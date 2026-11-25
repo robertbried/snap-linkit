@@ -260,10 +260,35 @@
     if (!(r.refind === 'none' || r.refind === 'cancelled' || /^found:[1-9][0-9]*$/.test(String(r.refind)))) fail('refind');
     for (const k of ['selected', 'boxes', 'links', 'updates', 'rebuilds']) if (!count(r[k])) fail(k);
     for (const k of ['slowest', 'scrollPause']) if (!ms(r[k])) fail(k);
+    // Later fields, each written only when the caller passes it (the content
+    // script passes all of them), in this fixed order after rebuilds
+    let extra = '';
+    for (const [k, allowed] of DRAG_EXTRAS) {
+      if (r[k] === undefined) continue;
+      if (allowed === 'count' ? !count(r[k]) : !allowed.includes(r[k])) fail(k);
+      extra += ` ${k}=${r[k]}`;
+    }
     return `[Snap Linkit] drag ${r.n}: end=${r.end} protection=${r.protection} anchor=${r.anchor} key=${r.key} ` +
       `refind=${r.refind} pressed=${dragDiagName(r.pressed)} moved=${dragDiagPx(r.moved)} gap=${dragDiagPx(r.gap)} ` +
       `selected=${r.selected} boxes=${r.boxes} links=${r.links} first=${dragDiagName(r.first)} last=${dragDiagName(r.last)} ` +
-      `updates=${r.updates} slowest=${Math.round(r.slowest)}ms scrollPause=${Math.round(r.scrollPause)}ms rebuilds=${r.rebuilds}`;
+      `updates=${r.updates} slowest=${Math.round(r.slowest)}ms scrollPause=${Math.round(r.scrollPause)}ms rebuilds=${r.rebuilds}` + extra;
+  }
+
+  // The drag line's later fields, in order: [name, 'count' or the allowed values].
+  //   follows: updates made because the page scrolled under the held drag (A1)
+  const DRAG_EXTRAS = Object.freeze([
+    ['follows', 'count'],
+  ].map(Object.freeze));
+
+  // A1: does the page need a new update because it scrolled? Plain facts:
+  // last / now: the window's scroll position { x, y } at the last update and
+  // now; inner: a scrolling box inside the page scrolled since the last
+  // update. An auto-scroll step updates on its own, so its scroll is already
+  // seen when the frame comes.
+  function dragFollowNeeded(last, now, inner) {
+    if (inner === true) return true;
+    if (!last || !now) return true;
+    return last.x !== now.x || last.y !== now.y;
   }
 
   // ---- Brief 7: the drag's element cache (pure parts) ----
@@ -696,6 +721,8 @@
     dragDiagName,
     dragDiagPx,
     dragDiagLine,
+    DRAG_EXTRAS,
+    dragFollowNeeded,
     selectableVerdict,
     labelMapFrom,
     touchesSelection,
