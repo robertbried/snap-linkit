@@ -858,8 +858,10 @@
   function updateLiveCount(rect) {
     if (!lassoCount) return;
     const { links, checkboxes, radios } = categorizeSelection();
+    // Links: counted once per address (what a release would open); none
+    // openable = '' (the count hides), as for no selection
     const text = links.length > 0
-      ? (getUniqueUrls().length > 0 ? liveCountText({ links: getUniqueUrls().length }) : '')
+      ? liveCountText({ links: getUniqueUrls().length, boxes: 0, radios: 0 })
       : liveCountText({ links: 0, boxes: checkboxes.length, radios: radios.length });
     if (lassoCount.textContent !== text) lassoCount.textContent = text;
     const display = text ? '' : 'none';
