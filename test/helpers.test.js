@@ -11,7 +11,7 @@ test('SnapLinkitLib exposes every helper and is frozen', () => {
     'carefulProgressMessage', 'carefulFallbackMessage', 'carefulNotStartedMessage', 'clampMenuAxis', 'faultMatches', 'dragModifierMode', 'filenameFromUrl', 'fitMenuAxis', 'formatDurationEstimate', 'formatShortcut',
     'isDownloadableUrl', 'isOpenableUrl', 'isStyleHidden', 'isTrackedCheckbox', 'isValidPattern', 'isVersionBefore', 'majorityShouldCheck',
     'matchesPattern', 'normalizeReleaseAction', 'ordinaryCheckboxMessage', 'ordinaryUnreadMessage', 'plural',
-    'proxyLabelIndexes', 'rectsIntersect', 'selectionRect', 'rectFromPoints', 'dragStartPoint', 'uniqueMatch', 'firstUsableAnchor', 'dragPageChangedMessage', 'dragStartFailedMessage', 'DRAG_OFF_REASONS', 'DRAG_ENDS', 'dragDiagName', 'dragDiagPx', 'dragDiagLine', 'DRAG_EXTRAS', 'dragFollowNeeded', 'trackingLock', 'fixedContainerAllows', 'selectableVerdict', 'labelMapFrom', 'touchesSelection', 'onlyOwnClassChange', 'pageChangeMarksStale', 'shouldOfferWhatsNew', 'whatsNewLines', 'whatsNewRecord', 'whatsNewShowsShortcuts',
+    'proxyLabelIndexes', 'rectsIntersect', 'selectionRect', 'rectFromPoints', 'dragStartPoint', 'uniqueMatch', 'firstUsableAnchor', 'dragPageChangedMessage', 'dragStartFailedMessage', 'DRAG_OFF_REASONS', 'DRAG_ENDS', 'dragDiagName', 'dragDiagPx', 'dragDiagLine', 'DRAG_EXTRAS', 'dragFollowNeeded', 'trackingLock', 'fixedContainerAllows', 'autoScrollStep', 'autoScrollZone', 'AUTO_SCROLL_CREEP', 'AUTO_SCROLL_CAP', 'autoScrollRate', 'autoScrollDelta', 'clampToArea', 'selectableVerdict', 'labelMapFrom', 'touchesSelection', 'onlyOwnClassChange', 'pageChangeMarksStale', 'shouldOfferWhatsNew', 'whatsNewLines', 'whatsNewRecord', 'whatsNewShowsShortcuts',
   ].sort());
   assert.ok(Object.isFrozen(lib));
   assert.equal(globalThis.SnapLinkitLib, lib);
@@ -365,9 +365,62 @@ test('fixedContainerAllows (C): an element in a fixed container only when the dr
 });
 
 test('dragDiagLine: fixedOut after lock (C)', () => {
-  assert.deepEqual(lib.DRAG_EXTRAS.map(([k]) => k), ['follows', 'lock', 'fixedOut']);
+  assert.deepEqual(lib.DRAG_EXTRAS.map(([k]) => k), ['follows', 'lock', 'fixedOut', 'topSpeed']);
   assert.match(lib.dragDiagLine({ ...DIAG, follows: 0, lock: 'none', fixedOut: 2 }), / follows=0 lock=none fixedOut=2$/);
   assert.throws(() => lib.dragDiagLine({ ...DIAG, fixedOut: -1 }), /^Error: dragDiagLine: bad fixedOut/);
+});
+
+test('autoScrollStep: both directions, always instant (brief 7b)', () => {
+  assert.deepEqual(lib.autoScrollStep(0, 15), { left: 0, top: 15, behavior: 'instant' });
+  assert.deepEqual(lib.autoScrollStep(-15, 0), { left: -15, top: 0, behavior: 'instant' });
+  assert.deepEqual(lib.autoScrollStep(30, -30), { left: 30, top: -30, behavior: 'instant' });
+  assert.deepEqual(Object.keys(lib.autoScrollStep(1, 2)).sort(), ['behavior', 'left', 'top']);
+});
+
+test('autoScrollZone (A2): the setting at 1.5 device px per CSS px, bigger when pixels are smaller, never smaller', () => {
+  assert.equal(lib.autoScrollZone(50, 1.5), 50);   // 100% zoom on a 150% display: today's zone
+  assert.equal(lib.autoScrollZone(50, 0.6), 125);  // 40% zoom on it: the same size on screen
+  assert.equal(lib.autoScrollZone(50, 1), 75);     // a 100% display
+  assert.equal(lib.autoScrollZone(50, 3), 50);     // never smaller than the setting
+  assert.equal(lib.autoScrollZone(100, 0.75), 200);
+  for (const dpr of [undefined, 0, NaN, -1]) assert.equal(lib.autoScrollZone(50, dpr), 75, String(dpr)); // unknown: as at 1
+});
+
+test('autoScrollRate (A2): a creep at the zone border, today\'s speed at the edge, faster past it, capped', () => {
+  const E = 937.5, Z = 50, W = 1000; // edge speed (15 px per 16 ms), zone, window
+  assert.equal(lib.autoScrollRate(500, W, Z, E), 0);                    // outside the zone
+  assert.equal(lib.autoScrollRate(W - Z, W, Z, E), 0);                  // its inner border: not yet
+  assert.ok(Math.abs(lib.autoScrollRate(W - Z + 1e-9, W, Z, E) - E * lib.AUTO_SCROLL_CREEP) < 1e-6); // just inside: the creep
+  assert.equal(lib.autoScrollRate(W, W, Z, E), E);                      // at the edge: exactly today's speed
+  const mid = lib.autoScrollRate(W - Z / 2, W, Z, E);
+  assert.ok(mid > E * lib.AUTO_SCROLL_CREEP && mid < E);                // grows with depth
+  assert.equal(lib.autoScrollRate(W + Z / 2, W, Z, E), E * 2);          // half a zone past the edge
+  assert.equal(lib.autoScrollRate(W + Z, W, Z, E), E * lib.AUTO_SCROLL_CAP);
+  assert.equal(lib.autoScrollRate(W + 10 * Z, W, Z, E), E * lib.AUTO_SCROLL_CAP); // capped
+  assert.equal(lib.autoScrollRate(0, W, Z, E), -E);                     // top edge: upwards, same rule
+  assert.equal(lib.autoScrollRate(-Z, W, Z, E), -E * lib.AUTO_SCROLL_CAP);
+  let prev = 0;
+  for (let p = W - Z + 1; p <= W + 2 * Z; p += 5) { const r = lib.autoScrollRate(p, W, Z, E); assert.ok(r >= prev, String(p)); prev = r; }
+  assert.equal(lib.autoScrollRate(W, W, 0, E), 0);
+  assert.equal(lib.autoScrollRate(W, W, Z, 0), 0);
+});
+
+test('autoScrollDelta (A2): whole pixels per tick, the fraction carried', () => {
+  assert.deepEqual(lib.autoScrollDelta(1000, 16, 0), { px: 16, carry: 0 });
+  let carry = 0, total = 0;
+  for (let i = 0; i < 10; i++) { const d = lib.autoScrollDelta(140.625, 16, carry); total += d.px; carry = d.carry; }
+  assert.equal(total, 22); // 140.625 px/s for 160 ms = 22.5 px: 22 whole, 0.5 carried
+  assert.ok(Math.abs(carry - 0.5) < 1e-9);
+  const up = lib.autoScrollDelta(-1000, 16, 0);
+  assert.equal(up.px, -16);
+  assert.equal(lib.autoScrollDelta(0, 16, 0).px, 0);
+});
+
+test('clampToArea (A2): the pointer end held inside the visible window', () => {
+  const A = { width: 1000, height: 800 };
+  assert.deepEqual(lib.clampToArea({ x: 500, y: 400 }, A), { x: 500, y: 400 });
+  assert.deepEqual(lib.clampToArea({ x: 1200, y: 1100 }, A), { x: 1000, y: 800 });
+  assert.deepEqual(lib.clampToArea({ x: -50, y: -10 }, A), { x: 0, y: 0 });
 });
 
 test('dragDiagLine: rebuilds, the last field (brief 7)', () => {

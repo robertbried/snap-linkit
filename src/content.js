@@ -11,6 +11,7 @@
     isOpenableUrl, matchesPattern, rectsIntersect, rectFromPoints, dragStartPoint,
     uniqueMatch, firstUsableAnchor, dragPageChangedMessage, dragStartFailedMessage, DRAG_OFF_REASONS, dragDiagLine, TRACKED_CHECKBOX_SELECTOR,
     dragFollowNeeded, trackingLock, fixedContainerAllows,
+    autoScrollStep, autoScrollZone, autoScrollRate, autoScrollDelta, clampToArea,
     isDownloadableUrl, majorityShouldCheck, plural, fitMenuAxis, clampMenuAxis,
     normalizeReleaseAction, dragModifierMode, isStyleHidden, proxyLabelIndexes,
     TRACKED_TABLE_SELECTOR, isTrackedCheckbox, afterClickOutcome, ordinaryCheckboxMessage,
@@ -280,7 +281,8 @@
       { x: state.startX, y: state.startY, scrollX: state.startScrollX, scrollY: state.startScrollY }
     );
     if (SAVE_LOG && dragDiag) dragDiag.lastStartPageY = start.y + scroll.y; // test builds: the drag line's gap
-    return rectFromPoints(start, { x: state.currentX, y: state.currentY });
+    // A2: the pointer end stays inside the visible window (nothing unseen is selected)
+    return rectFromPoints(start, clampToArea({ x: state.currentX, y: state.currentY }, visibleArea()));
   }
 
   // ---- The drag's element cache (brief 7) ----
@@ -592,7 +594,7 @@
       const el = isElementNode(e.target) ? e.target : null;
       dragDiag = { started: false, protection: 'off:' + DRAG_OFF_REASONS.threw, anchor: 'none', key: 'none',
         refinds: 0, refindCancelled: false, el: null, pressed: el ? diagPressedName(el) : null, pressPageY: null,
-        offY: null, updates: 0, slowest: 0, scrollPause: 0, lastScrollUpdate: null, lastStartPageY: null, follows: 0, fixedOut: new Set() };
+        offY: null, updates: 0, slowest: 0, scrollPause: 0, lastScrollUpdate: null, lastStartPageY: null, follows: 0, fixedOut: new Set(), topSpeed: 0 };
       if (el) diagPlace(dragDiag, el, e.clientY);
     } catch (error) {
       dragDiag = null;
@@ -678,6 +680,7 @@
         follows: rec.follows,
         lock: state.trackLock ? 'tracking' : 'none',
         fixedOut: rec.fixedOut.size,
+        topSpeed: rec.topSpeed,
       }));
     } catch (error) {
       diagFailed(error);
@@ -1880,8 +1883,16 @@
   // AUTO-SCROLL
   // ============================================
 
+  // A2: the page follows the drag. In the edge zone (sized on screen, see
+  // autoScrollZone) the page scrolls faster the deeper the pointer is, and
+  // faster still past the window edge (autoScrollRate); at the edge it is never
+  // slower than before. Rates are per second, so a busy page doesn't slow the
+  // scroll; each step is instant (brief 7b), even where the page asks for
+  // smooth scrolling.
   function startAutoScroll() {
     if (state.scrollInterval) return;
+    let last = performance.now();
+    const carry = { x: 0, y: 0 };
 
     state.scrollInterval = setInterval(() => {
       if (!state.isSelecting) {
@@ -1889,34 +1900,29 @@
         return;
       }
 
-      let scrollX = 0;
-      let scrollY = 0;
+      const now = performance.now();
+      const dt = Math.min(50, Math.max(0, now - last)); // a late tick doesn't jump the page
+      last = now;
+      const area = visibleArea();
+      const zone = autoScrollZone(settings.scrollEdgeThreshold, window.devicePixelRatio);
+      const edgeSpeed = settings.autoScrollSpeed * 1000 / FRAME_INTERVAL; // the setting is px per 16 ms frame
+      const rx = autoScrollRate(state.currentX, area.width, zone, edgeSpeed);
+      const ry = autoScrollRate(state.currentY, area.height, zone, edgeSpeed);
+      const sx = autoScrollDelta(rx, dt, rx ? carry.x : 0);
+      const sy = autoScrollDelta(ry, dt, ry ? carry.y : 0);
+      carry.x = sx.carry;
+      carry.y = sy.carry;
 
-      const { currentX, currentY } = state;
-      const { innerWidth, innerHeight } = window;
-
-      // Detect if cursor is near viewport edges - uses settings
-      if (currentX < settings.scrollEdgeThreshold) {
-        scrollX = -settings.autoScrollSpeed;
-      } else if (currentX > innerWidth - settings.scrollEdgeThreshold) {
-        scrollX = settings.autoScrollSpeed;
-      }
-
-      if (currentY < settings.scrollEdgeThreshold) {
-        scrollY = -settings.autoScrollSpeed;
-      } else if (currentY > innerHeight - settings.scrollEdgeThreshold) {
-        scrollY = settings.autoScrollSpeed;
-      }
-
-      if (scrollX !== 0 || scrollY !== 0) {
-        window.scrollBy(scrollX, scrollY);
+      if (sx.px !== 0 || sy.px !== 0) {
+        window.scrollBy(autoScrollStep(sx.px, sy.px)); // instant, even where the page asks for smooth scrolling (brief 7b)
+        if (SAVE_LOG && dragDiag) dragDiag.topSpeed = Math.max(dragDiag.topSpeed, Math.round(Math.max(Math.abs(rx), Math.abs(ry))));
         // NO mutation of state.startX/startY - getSelectionRect() follows the
         // pressed element (or the scroll delta when there is no anchor)
         if (!refreshDragAnchor()) return;
         if (SAVE_LOG && dragDiag) diagScrollUpdate();
         updateLassoAndSelection();
-      } else if (SAVE_LOG && dragDiag) {
-        dragDiag.lastScrollUpdate = null; // the pointer left the edge strip: the next stretch starts fresh
+      } else if (!rx && !ry && SAVE_LOG && dragDiag) {
+        dragDiag.lastScrollUpdate = null; // the pointer left the edge zone: the next stretch starts fresh
       }
     }, FRAME_INTERVAL);
   }

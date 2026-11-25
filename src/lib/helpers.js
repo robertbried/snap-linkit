@@ -278,10 +278,12 @@
   //   follows: updates made because the page scrolled under the held drag (A1)
   //   lock: "tracking" when the drag selects only Fandom tracking boxes (B)
   //   fixedOut: elements left out because they sit in a fixed container the drag wasn't pressed in (C)
+  //   topSpeed: the fastest auto-scroll rate this drag reached, CSS px per second (A2)
   const DRAG_EXTRAS = Object.freeze([
     ['follows', 'count'],
     ['lock', ['tracking', 'none']],
     ['fixedOut', 'count'],
+    ['topSpeed', 'count'],
   ].map(Object.freeze));
 
   // C: may an element inside a position: fixed container be selected? Plain
@@ -303,6 +305,60 @@
   // checkboxes when the pointer drifts. The drag's anchor is chosen as before.
   function trackingLock(f) {
     return Boolean(f) && (f.isTrackedBox === true || f.labelsTrackedBox === true || f.cellHasTrackedBox === true);
+  }
+
+  // Brief 7b: one auto-scroll step. 'instant', so a page that asks for smooth
+  // scrolling (Fandom: html { scroll-behavior: smooth }) doesn't turn each
+  // step into an animation the next step cuts short; on other pages it's what
+  // window.scrollBy(x, y) already does. Pass the result to window.scrollBy.
+  function autoScrollStep(left, top) {
+    return { left, top, behavior: 'instant' };
+  }
+
+  // ---- A2: the page follows the drag ----
+  // The edge zone in CSS px: the edge setting is the zone at 100% zoom on a
+  // display scaled 150% (Windows laptops); where page pixels are smaller on
+  // screen (zoomed out, or a display scaled less) the zone grows to keep its
+  // size on screen. Never smaller than the setting in CSS px (today's zone).
+  function autoScrollZone(setting, dpr) {
+    const d = Number.isFinite(dpr) && dpr > 0 ? dpr : 1;
+    return setting * Math.max(1, 1.5 / d);
+  }
+
+  // Auto-scroll rate along one axis, in CSS px per second, signed (negative =
+  // up or left). pos: the pointer's client coordinate (outside the window it
+  // can be below 0 or above size); size: the visible window on that axis;
+  // zone: autoScrollZone; edgeSpeed: the speed at the window edge, today's
+  // speed (the speed setting's px per 16 ms frame), never slower there.
+  // Inside the zone the rate grows with depth, from a creep at the zone's
+  // inner border to edgeSpeed at the edge; past the edge it keeps growing,
+  // to AUTO_SCROLL_CAP times edgeSpeed one more zone further out.
+  const AUTO_SCROLL_CREEP = 0.15;
+  const AUTO_SCROLL_CAP = 3;
+  function autoScrollRate(pos, size, zone, edgeSpeed) {
+    if (!(zone > 0) || !(edgeSpeed > 0)) return 0;
+    let depth;
+    let sign;
+    if (pos < zone) { depth = zone - pos; sign = -1; }
+    else if (pos > size - zone) { depth = pos - (size - zone); sign = 1; }
+    else return 0;
+    if (depth <= zone) return sign * edgeSpeed * (AUTO_SCROLL_CREEP + (1 - AUTO_SCROLL_CREEP) * (depth / zone) * (depth / zone));
+    return sign * edgeSpeed * Math.min(AUTO_SCROLL_CAP, 1 + (AUTO_SCROLL_CAP - 1) * (depth - zone) / zone);
+  }
+
+  // Whole pixels to scroll this tick at `rate` px/s over dtMs, carrying the
+  // fraction to the next tick (so slow rates still move): { px, carry }
+  function autoScrollDelta(rate, dtMs, carry) {
+    const total = rate * dtMs / 1000 + (carry || 0);
+    const px = Math.trunc(total);
+    return { px, carry: total - px };
+  }
+
+  // The pointer end of the selection box, held inside the visible window, so
+  // nothing the user can't see is selected (the start stays on the pressed row
+  // even after it has scrolled away)
+  function clampToArea(point, area) {
+    return { x: Math.min(Math.max(point.x, 0), area.width), y: Math.min(Math.max(point.y, 0), area.height) };
   }
 
   // A1: does the page need a new update because it scrolled? Plain facts:
@@ -748,6 +804,13 @@
     dragDiagLine,
     DRAG_EXTRAS,
     dragFollowNeeded,
+    autoScrollStep,
+    autoScrollZone,
+    AUTO_SCROLL_CREEP,
+    AUTO_SCROLL_CAP,
+    autoScrollRate,
+    autoScrollDelta,
+    clampToArea,
     trackingLock,
     fixedContainerAllows,
     selectableVerdict,
