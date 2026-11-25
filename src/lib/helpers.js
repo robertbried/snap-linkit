@@ -276,9 +276,22 @@
 
   // The drag line's later fields, in order: [name, 'count' or the allowed values].
   //   follows: updates made because the page scrolled under the held drag (A1)
+  //   lock: "tracking" when the drag selects only Fandom tracking boxes (B)
   const DRAG_EXTRAS = Object.freeze([
     ['follows', 'count'],
+    ['lock', ['tracking', 'none']],
   ].map(Object.freeze));
+
+  // B: does a drag pressed here select only Fandom tracking boxes? Plain facts
+  // about the element pressed: { isTrackedBox: it is the box itself,
+  // labelsTrackedBox: it sits in a label of a tracking box, cellHasTrackedBox:
+  // the table cell around it holds a tracking box }. A press anywhere in a
+  // tracking cell counts (the label, the box, the cell's wrapper or padding),
+  // so a drag down a tracking column can't pick up links, page chrome or other
+  // checkboxes when the pointer drifts. The drag's anchor is chosen as before.
+  function trackingLock(f) {
+    return Boolean(f) && (f.isTrackedBox === true || f.labelsTrackedBox === true || f.cellHasTrackedBox === true);
+  }
 
   // A1: does the page need a new update because it scrolled? Plain facts:
   // last / now: the window's scroll position { x, y } at the last update and
@@ -723,6 +736,7 @@
     dragDiagLine,
     DRAG_EXTRAS,
     dragFollowNeeded,
+    trackingLock,
     selectableVerdict,
     labelMapFrom,
     touchesSelection,

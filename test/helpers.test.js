@@ -11,7 +11,7 @@ test('SnapLinkitLib exposes every helper and is frozen', () => {
     'carefulProgressMessage', 'carefulFallbackMessage', 'carefulNotStartedMessage', 'clampMenuAxis', 'faultMatches', 'dragModifierMode', 'filenameFromUrl', 'fitMenuAxis', 'formatDurationEstimate', 'formatShortcut',
     'isDownloadableUrl', 'isOpenableUrl', 'isStyleHidden', 'isTrackedCheckbox', 'isValidPattern', 'isVersionBefore', 'majorityShouldCheck',
     'matchesPattern', 'normalizeReleaseAction', 'ordinaryCheckboxMessage', 'ordinaryUnreadMessage', 'plural',
-    'proxyLabelIndexes', 'rectsIntersect', 'selectionRect', 'rectFromPoints', 'dragStartPoint', 'uniqueMatch', 'firstUsableAnchor', 'dragPageChangedMessage', 'dragStartFailedMessage', 'DRAG_OFF_REASONS', 'DRAG_ENDS', 'dragDiagName', 'dragDiagPx', 'dragDiagLine', 'DRAG_EXTRAS', 'dragFollowNeeded', 'selectableVerdict', 'labelMapFrom', 'touchesSelection', 'onlyOwnClassChange', 'pageChangeMarksStale', 'shouldOfferWhatsNew', 'whatsNewLines', 'whatsNewRecord', 'whatsNewShowsShortcuts',
+    'proxyLabelIndexes', 'rectsIntersect', 'selectionRect', 'rectFromPoints', 'dragStartPoint', 'uniqueMatch', 'firstUsableAnchor', 'dragPageChangedMessage', 'dragStartFailedMessage', 'DRAG_OFF_REASONS', 'DRAG_ENDS', 'dragDiagName', 'dragDiagPx', 'dragDiagLine', 'DRAG_EXTRAS', 'dragFollowNeeded', 'trackingLock', 'selectableVerdict', 'labelMapFrom', 'touchesSelection', 'onlyOwnClassChange', 'pageChangeMarksStale', 'shouldOfferWhatsNew', 'whatsNewLines', 'whatsNewRecord', 'whatsNewShowsShortcuts',
   ].sort());
   assert.ok(Object.isFrozen(lib));
   assert.equal(globalThis.SnapLinkitLib, lib);
@@ -338,6 +338,22 @@ test('dragFollowNeeded (A1): a new update when the window scrolled since the las
   assert.equal(lib.dragFollowNeeded({ x: 0, y: 100 }, { x: 30, y: 100 }, false), true);
   assert.equal(lib.dragFollowNeeded({ x: 0, y: 100 }, { x: 0, y: 100 }, true), true);
   assert.equal(lib.dragFollowNeeded(null, { x: 0, y: 0 }, false), true);
+});
+
+test('trackingLock (B): a press on the box, its label or anywhere in its cell locks the drag to tracking boxes', () => {
+  assert.equal(lib.trackingLock({ isTrackedBox: true }), true);
+  assert.equal(lib.trackingLock({ labelsTrackedBox: true }), true);
+  assert.equal(lib.trackingLock({ cellHasTrackedBox: true }), true);
+  assert.equal(lib.trackingLock({ isTrackedBox: false, labelsTrackedBox: false, cellHasTrackedBox: false }), false);
+  assert.equal(lib.trackingLock(null), false);
+  assert.equal(lib.trackingLock({ cellHasTrackedBox: 'yes' }), false);
+});
+
+test('dragDiagLine: lock=tracking|none after follows (B)', () => {
+  assert.deepEqual(lib.DRAG_EXTRAS.map(([k]) => k).slice(0, 2), ['follows', 'lock']);
+  assert.match(lib.dragDiagLine({ ...DIAG, follows: 2, lock: 'tracking' }), / rebuilds=0 follows=2 lock=tracking$/);
+  assert.equal(diagFields(lib.dragDiagLine({ ...DIAG, follows: 0, lock: 'none' })).lock, 'none');
+  for (const lock of ['yes', '', true]) assert.throws(() => lib.dragDiagLine({ ...DIAG, lock }), /^Error: dragDiagLine: bad lock/);
 });
 
 test('dragDiagLine: rebuilds, the last field (brief 7)', () => {

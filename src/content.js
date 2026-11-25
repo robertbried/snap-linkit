@@ -10,7 +10,7 @@
   const {
     isOpenableUrl, matchesPattern, rectsIntersect, rectFromPoints, dragStartPoint,
     uniqueMatch, firstUsableAnchor, dragPageChangedMessage, dragStartFailedMessage, DRAG_OFF_REASONS, dragDiagLine, TRACKED_CHECKBOX_SELECTOR,
-    dragFollowNeeded,
+    dragFollowNeeded, trackingLock,
     isDownloadableUrl, majorityShouldCheck, plural, fitMenuAxis, clampMenuAxis,
     normalizeReleaseAction, dragModifierMode, isStyleHidden, proxyLabelIndexes,
     TRACKED_TABLE_SELECTOR, isTrackedCheckbox, afterClickOutcome, ordinaryCheckboxMessage,
@@ -67,6 +67,7 @@
     scrollInterval: null,
     anchor: null,        // { el, offX, offY, key, root }: the element pressed (brief 3); null = old maths
     pressFailed: false,  // choosing the anchor threw at the press: a drag from it is cancelled (brief 5)
+    trackLock: false,    // pressed in a Fandom tracking cell: the drag selects only tracking boxes (B)
   };
 
   // Extension active state (can be disabled via blacklist)
@@ -437,8 +438,7 @@
   // is position: fixed (pinned by a unit test). null keeps the old maths:
   // nothing usable above <html>/<body>, or no element at all.
   function pickDragAnchor(e) {
-    const path = typeof e.composedPath === 'function' ? e.composedPath() : [];
-    const hit = path.find(isElementNode) || (isElementNode(e.target) ? e.target : null);
+    const hit = pressedElement(e);
     if (!hit || typeof hit.closest !== 'function') return diagPick(null, DRAG_OFF_REASONS.noElement, hit, e);
     faultPoint('anchor'); // lab builds: choosing the anchor throws (the drag line's "off:threw")
     const pressed = mapToAnchorElement(hit);
@@ -459,6 +459,34 @@
     const r = anchorBox(el);
     const root = typeof el.getRootNode === 'function' ? el.getRootNode() : document;
     return diagPick({ el, offX: e.clientX - r.left, offY: e.clientY - r.top, key: anchorKey(el), root }, reason, pressed, e);
+  }
+
+  // The element a press landed on: the real one inside an open shadow root,
+  // else the event's target; null when there is no element
+  function pressedElement(e) {
+    const path = typeof e.composedPath === 'function' ? e.composedPath() : [];
+    return path.find(isElementNode) || (isElementNode(e.target) ? e.target : null);
+  }
+
+  // B: was the drag pressed in a Fandom tracking cell (the box, its label, or
+  // anywhere else in the cell, such as its wrapper's padding)? Decided from
+  // the element pressed; the anchor is chosen as before (brief 6 is deferred).
+  function pressInTrackingCell(el) {
+    if (!isElementNode(el) || typeof el.closest !== 'function') return false;
+    const label = el.closest('label');
+    const cell = el.closest('td');
+    return trackingLock({
+      isTrackedBox: isTrackedBox(el),
+      labelsTrackedBox: Boolean(label && label.control && isTrackedBox(label.control)),
+      cellHasTrackedBox: Boolean(cell) && Array.from(cell.querySelectorAll(TRACKED_CHECKBOX_SELECTOR)).some(isTrackedBox),
+    });
+  }
+
+  // The drag's candidates: everything selectable, or only Fandom's tracking
+  // boxes on a drag pressed in a tracking cell (B). Normal pages are unchanged.
+  function candidateList() {
+    if (state.trackLock) return Array.from(document.querySelectorAll(TRACKED_CHECKBOX_SELECTOR)).filter(isTrackedBox);
+    return Array.from(document.querySelectorAll(SELECTABLE_SELECTOR));
   }
 
   // Before each update: is the pressed element still there? If the page
@@ -622,6 +650,7 @@
         updates: rec.updates, slowest: rec.slowest, scrollPause: rec.scrollPause,
         rebuilds: dragCache ? dragCache.rebuilds : 0,
         follows: rec.follows,
+        lock: state.trackLock ? 'tracking' : 'none',
       }));
     } catch (error) {
       diagFailed(error);
@@ -1630,7 +1659,7 @@
   function applySelection() {
     const selRect = getSelectionRect();
     const c = dragCache;
-    if (!c.list) c.list = Array.from(document.querySelectorAll(SELECTABLE_SELECTOR));
+    if (!c.list) c.list = candidateList();
 
     const currentlyInLasso = new Set();
 
@@ -1905,8 +1934,10 @@
     stopDragFollow(); // ... and its scroll listener (A1)
     let anchor = null;
     let pressFailed = false;
+    let trackLock = false;
     try {
       anchor = pickDragAnchor(e);
+      trackLock = pressInTrackingCell(pressedElement(e));
     } catch (error) {
       pressFailed = true;
       console.error(`[Snap Linkit] Could not start the selection: ${error && error.message ? error.message : String(error)}`, error);
@@ -1920,6 +1951,7 @@
     state.isDragging = false; // Not dragging yet - waiting for threshold
     state.pressFailed = pressFailed;
     state.anchor = anchor;
+    state.trackLock = trackLock;
     state.startX = e.clientX;
     state.startY = e.clientY;
     state.startScrollX = window.scrollX;
