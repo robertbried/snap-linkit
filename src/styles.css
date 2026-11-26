@@ -241,6 +241,13 @@
   line-height: 1.5;
 }
 
+/* Items 11 + 14: what the drag caught, under the title: "(5 already checked) First row → Last row" */
+.snaplinkit-confirm p.snaplinkit-confirm-detail {
+  color: #e6d6f5;
+  margin: -6px 0 12px 0;
+  font-weight: 600;
+}
+
 .snaplinkit-confirm-buttons {
   display: flex;
   gap: 12px;

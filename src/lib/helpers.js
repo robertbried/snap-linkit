@@ -737,13 +737,31 @@
   // "{verb} {k} items?" / "{verb} All" with {verb} = Checked/Unchecked; read as
   // the imperative here ("Check 40 items?", "Check All"), like "Open 25 tabs?".
   //   perItemMs: gap + assumed save time per box
-  function carefulConfirmText(target, k, perItemMs) {
+  // Items 11 + 14 (big run 2): `detail`, the line under the title, shows what
+  // the drag caught before anything is saved: how many it holds already in the
+  // wanted state, and the first and last rows it will change (page order), e.g.
+  // "(5 already checked) Master Marksman → Little Inanimate Spies". '' when
+  // there's neither. extra = { already, first, last } (row names, or null).
+  function carefulConfirmText(target, k, perItemMs, extra = {}) {
     const verb = target ? 'Check' : 'Uncheck';
+    const already = Number.isInteger(extra.already) && extra.already > 0
+      ? `(${extra.already} already ${target ? 'checked' : 'unchecked'})` : '';
+    const first = rowLabel(extra.first), last = rowLabel(extra.last);
+    const range = first && last ? (first === last ? first : `${first} \u2192 ${last}`) : first || last;
     return {
       title: `${verb} ${plural(k, 'item')}?`,
+      detail: [already, range].filter(Boolean).join(' '),
       message: `Snap Linkit will save them one at a time. This takes ${formatDurationEstimate(k * perItemMs)}.`,
       confirmLabel: `${verb} All`,
     };
+  }
+
+  // A row's name for the screen (the confirm dialog): whitespace collapsed,
+  // cut at 40 characters with an ellipsis; '' for none
+  function rowLabel(s) {
+    if (s === null || s === undefined) return '';
+    const v = String(s).replace(/\s+/g, ' ').trim();
+    return v.length > 40 ? v.slice(0, 40) + '\u2026' : v;
   }
 
   // ---- Brief 2b: no silent or wrong message when something around a careful run fails ----
@@ -959,6 +977,7 @@
     carefulProgressMessage,
     formatDurationEstimate,
     carefulConfirmText,
+    rowLabel,
     ordinaryUnreadMessage,
     carefulFallbackMessage,
     carefulNotStartedMessage,

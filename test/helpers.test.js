@@ -8,7 +8,7 @@ test('SnapLinkitLib exposes every helper and is frozen', () => {
   assert.deepEqual(Object.keys(lib).sort(), [
     'DOWNLOAD_EXTENSIONS', 'OPENABLE_PROTOCOLS', 'RELEASE_ACTIONS', 'WHATS_NEW_SHORTCUTS', 'WHATS_NEW_VERSION',
     'TRACKED_CHECKBOX_SELECTOR', 'TRACKED_TABLE_SELECTOR', 'afterClickOutcome', 'blacklistBytes', 'carefulCheckboxMessage', 'carefulConfirmText',
-    'carefulProgressMessage', 'carefulFallbackMessage', 'carefulNotStartedMessage', 'clampMenuAxis', 'faultMatches', 'dragModifierMode', 'filenameFromUrl', 'fitMenuAxis', 'formatDurationEstimate', 'formatShortcut',
+    'carefulProgressMessage', 'carefulFallbackMessage', 'rowLabel', 'carefulNotStartedMessage', 'clampMenuAxis', 'faultMatches', 'dragModifierMode', 'filenameFromUrl', 'fitMenuAxis', 'formatDurationEstimate', 'formatShortcut',
     'isDownloadableUrl', 'isOpenableUrl', 'isStyleHidden', 'isTrackedCheckbox', 'isValidPattern', 'isVersionBefore', 'majorityShouldCheck',
     'matchesPattern', 'normalizeReleaseAction', 'ordinaryCheckboxMessage', 'ordinaryUnreadMessage', 'plural',
     'proxyLabelIndexes', 'rectsIntersect', 'selectionRect', 'rectFromPoints', 'dragStartPoint', 'uniqueMatch', 'firstUsableAnchor', 'dragPageChangedMessage', 'dragStartFailedMessage', 'DRAG_OFF_REASONS', 'DRAG_ENDS', 'dragDiagName', 'dragDiagPx', 'dragDiagLine', 'DRAG_EXTRAS', 'saveLogLine', 'anchorLostOutcome', 'releaseAfterCarryOn', 'saveGapMs', 'SAVE_GAP_MAX_MS', 'SAVE_GAP_DEFAULT_MS', 'siteRunState', 'toolbarBadge', 'dragFollowNeeded', 'trackingLock', 'fixedContainerAllows', 'autoScrollStep', 'autoScrollZone', 'AUTO_SCROLL_CREEP', 'AUTO_SCROLL_CAP', 'autoScrollRate', 'autoScrollDelta', 'clampToArea', 'liveCountText', 'selectableVerdict', 'labelMapFrom', 'touchesSelection', 'onlyOwnClassChange', 'pageChangeMarksStale', 'shouldOfferWhatsNew', 'whatsNewLines', 'whatsNewRecord', 'whatsNewShowsShortcuts',
@@ -958,11 +958,25 @@ test('formatDurationEstimate: 5-second steps under a minute, then whole minutes'
 
 test('carefulConfirmText: title, estimate text and button', () => {
   assert.deepEqual(lib.carefulConfirmText(true, 40, 450), {
-    title: 'Check 40 items?', message: 'Snap Linkit will save them one at a time. This takes about 20 seconds.', confirmLabel: 'Check All',
+    title: 'Check 40 items?', detail: '', message: 'Snap Linkit will save them one at a time. This takes about 20 seconds.', confirmLabel: 'Check All',
   });
   assert.deepEqual(lib.carefulConfirmText(false, 208, 300), {
-    title: 'Uncheck 208 items?', message: 'Snap Linkit will save them one at a time. This takes about 1 minute.', confirmLabel: 'Uncheck All',
+    title: 'Uncheck 208 items?', detail: '', message: 'Snap Linkit will save them one at a time. This takes about 1 minute.', confirmLabel: 'Uncheck All',
   });
+});
+
+test('carefulConfirmText (items 11 + 14): the line under the title: the "already" count and the first and last row', () => {
+  const d = (target, extra) => lib.carefulConfirmText(target, 35, 450, extra).detail;
+  // Rob's example
+  assert.equal(d(true, { already: 5, first: 'Master Marksman', last: 'Little Inanimate Spies' }), '(5 already checked) Master Marksman \u2192 Little Inanimate Spies');
+  assert.equal(d(false, { already: 35, first: 'Dine In', last: 'Inspiring' }), '(35 already unchecked) Dine In \u2192 Inspiring');
+  assert.equal(d(true, { already: 0, first: 'Ar1', last: 'Ar35' }), 'Ar1 \u2192 Ar35');
+  assert.equal(d(true, { already: 2, first: 'Only one', last: 'Only one' }), '(2 already checked) Only one');
+  assert.equal(d(true, { already: 3 }), '(3 already checked)');
+  assert.equal(d(true, { first: '  Two   spaces ', last: null }), 'Two spaces');
+  assert.equal(d(true, { already: -1, first: 'x'.repeat(45), last: 'y' }), `${'x'.repeat(40)}\u2026 \u2192 y`);
+  assert.equal(d(true, {}), '');
+  assert.equal(lib.rowLabel(null), ''); assert.equal(lib.rowLabel(' a \n b '), 'a b');
 });
 
 // ---- Brief 2b: no silent or wrong message around a careful run ----

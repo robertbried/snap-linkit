@@ -1165,6 +1165,13 @@
 
     const title = document.createElement('h3');
     title.textContent = text.title;
+    // Items 11 + 14: the "already" count and the first → last row, when given
+    let detail = null;
+    if (text.detail) {
+      detail = document.createElement('p');
+      detail.className = 'snaplinkit-confirm-detail';
+      detail.textContent = text.detail;
+    }
     const message = document.createElement('p');
     message.textContent = text.message;
     const buttons = document.createElement('div');
@@ -1176,7 +1183,7 @@
     confirmBtn.className = 'snaplinkit-confirm-btn primary';
     confirmBtn.textContent = text.confirmLabel;
     buttons.append(cancelBtn, confirmBtn);
-    dialog.append(title, message, buttons);
+    dialog.append(...[title, detail, message, buttons].filter(Boolean));
 
     const root = uiRoot();
     root.appendChild(overlay);
@@ -1702,7 +1709,11 @@
       let shown;
       try {
         shown = showConfirmDialog(
-          carefulConfirmText(target, queue.length, currentSaveGapMs() + CHECKBOX_SAVE_ESTIMATE_MS),
+          carefulConfirmText(target, queue.length, currentSaveGapMs() + CHECKBOX_SAVE_ESTIMATE_MS, {
+            already: pre.already,
+            first: queue[0].getAttribute('data-tpt-row-id'),
+            last: queue[queue.length - 1].getAttribute('data-tpt-row-id'),
+          }),
           start,
           () => {
             // Cancel clicks nothing (ordinary boxes were already done)
