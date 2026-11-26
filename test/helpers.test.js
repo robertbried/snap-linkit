@@ -11,7 +11,7 @@ test('SnapLinkitLib exposes every helper and is frozen', () => {
     'carefulProgressMessage', 'carefulFallbackMessage', 'carefulNotStartedMessage', 'clampMenuAxis', 'faultMatches', 'dragModifierMode', 'filenameFromUrl', 'fitMenuAxis', 'formatDurationEstimate', 'formatShortcut',
     'isDownloadableUrl', 'isOpenableUrl', 'isStyleHidden', 'isTrackedCheckbox', 'isValidPattern', 'isVersionBefore', 'majorityShouldCheck',
     'matchesPattern', 'normalizeReleaseAction', 'ordinaryCheckboxMessage', 'ordinaryUnreadMessage', 'plural',
-    'proxyLabelIndexes', 'rectsIntersect', 'selectionRect', 'rectFromPoints', 'dragStartPoint', 'uniqueMatch', 'firstUsableAnchor', 'dragPageChangedMessage', 'dragStartFailedMessage', 'DRAG_OFF_REASONS', 'DRAG_ENDS', 'dragDiagName', 'dragDiagPx', 'dragDiagLine', 'DRAG_EXTRAS', 'anchorLostOutcome', 'releaseAfterCarryOn', 'saveGapMs', 'SAVE_GAP_MAX_MS', 'SAVE_GAP_DEFAULT_MS', 'siteRunState', 'toolbarBadge', 'dragFollowNeeded', 'trackingLock', 'fixedContainerAllows', 'autoScrollStep', 'autoScrollZone', 'AUTO_SCROLL_CREEP', 'AUTO_SCROLL_CAP', 'autoScrollRate', 'autoScrollDelta', 'clampToArea', 'liveCountText', 'selectableVerdict', 'labelMapFrom', 'touchesSelection', 'onlyOwnClassChange', 'pageChangeMarksStale', 'shouldOfferWhatsNew', 'whatsNewLines', 'whatsNewRecord', 'whatsNewShowsShortcuts',
+    'proxyLabelIndexes', 'rectsIntersect', 'selectionRect', 'rectFromPoints', 'dragStartPoint', 'uniqueMatch', 'firstUsableAnchor', 'dragPageChangedMessage', 'dragStartFailedMessage', 'DRAG_OFF_REASONS', 'DRAG_ENDS', 'dragDiagName', 'dragDiagPx', 'dragDiagLine', 'DRAG_EXTRAS', 'saveLogLine', 'anchorLostOutcome', 'releaseAfterCarryOn', 'saveGapMs', 'SAVE_GAP_MAX_MS', 'SAVE_GAP_DEFAULT_MS', 'siteRunState', 'toolbarBadge', 'dragFollowNeeded', 'trackingLock', 'fixedContainerAllows', 'autoScrollStep', 'autoScrollZone', 'AUTO_SCROLL_CREEP', 'AUTO_SCROLL_CAP', 'autoScrollRate', 'autoScrollDelta', 'clampToArea', 'liveCountText', 'selectableVerdict', 'labelMapFrom', 'touchesSelection', 'onlyOwnClassChange', 'pageChangeMarksStale', 'shouldOfferWhatsNew', 'whatsNewLines', 'whatsNewRecord', 'whatsNewShowsShortcuts',
   ].sort());
   assert.ok(Object.isFrozen(lib));
   assert.equal(globalThis.SnapLinkitLib, lib);
@@ -368,6 +368,14 @@ test('dragDiagLine: fixedOut after lock (C)', () => {
   assert.deepEqual(lib.DRAG_EXTRAS.map(([k]) => k).slice(0, 4), ['follows', 'lock', 'fixedOut', 'topSpeed']);
   assert.match(lib.dragDiagLine({ ...DIAG, follows: 0, lock: 'none', fixedOut: 2 }), / follows=0 lock=none fixedOut=2$/);
   assert.throws(() => lib.dragDiagLine({ ...DIAG, fixedOut: -1 }), /^Error: dragDiagLine: bad fixedOut/);
+});
+
+test('saveLogLine (item 20): the test-build save line names the row saved, quoted like the drag line', () => {
+  assert.equal(lib.saveLogLine(3, 25, 'ok', 183.4, 'Master Marksman'), '[Snap Linkit] save 3/25 ok 183 ms row="Master Marksman"');
+  assert.equal(lib.saveLogLine(1, 1, 'timeout', 10000, 'A "quoted"  name'), `[Snap Linkit] save 1/1 timeout 10000 ms row="A 'quoted' name"`);
+  assert.equal(lib.saveLogLine(2, 9, 'failed', 0, null), '[Snap Linkit] save 2/9 failed 0 ms row=""');
+  assert.equal(lib.saveLogLine(4, 4, 'ok', 1, 'x'.repeat(45)), `[Snap Linkit] save 4/4 ok 1 ms row="${'x'.repeat(40)}\u2026"`);
+  assert.ok(lib.saveLogLine(5, 40, 'ok', 50, 'Ar5').startsWith('[Snap Linkit] save 5/40 ok')); // the measurement's prefix is kept
 });
 
 test('anchorLostOutcome (ultrareview 1, #1): only a drag locked to tracking boxes is cancelled; any other carries on', () => {

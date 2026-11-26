@@ -136,7 +136,7 @@ function testManifest(text, target) {
 const TEST_ONLY_LINE = /\/\/ @test-only(?=$|[\s:])/;
 const TEST_ONLY_BEGIN = /^\s*\/\/ @test-only-begin(?=$|\s)/;
 const TEST_ONLY_END = /^\s*\/\/ @test-only-end(?=$|\s)/;
-export const TEST_ONLY_NAMES = /\b(SAVE_LOG|FAULTS|faultActive|faultPoint|faultMatches|dragDiag\w*|diagWrite|diagPress|diagPlace|diagUpdated|diagScrollUpdate|diagFailed|logSave|DRAG_ENDS|DRAG_EXTRAS)\b|@test-only/;
+export const TEST_ONLY_NAMES = /\b(SAVE_LOG|FAULTS|faultActive|faultPoint|faultMatches|dragDiag\w*|diagWrite|diagPress|diagPlace|diagUpdated|diagScrollUpdate|diagFailed|logSave|saveLogLine|DRAG_ENDS|DRAG_EXTRAS)\b|@test-only/;
 
 export function stripTestOnly(text, what = 'script') {
   const out = [];

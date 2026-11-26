@@ -11,6 +11,7 @@
     isOpenableUrl, matchesPattern, rectsIntersect, rectFromPoints, dragStartPoint,
     uniqueMatch, firstUsableAnchor, dragPageChangedMessage, dragStartFailedMessage, DRAG_OFF_REASONS, TRACKED_CHECKBOX_SELECTOR,
     dragDiagLine, // @test-only
+    saveLogLine, // @test-only
     dragFollowNeeded, trackingLock, fixedContainerAllows, anchorLostOutcome, releaseAfterCarryOn, saveGapMs, siteRunState,
     autoScrollStep, autoScrollZone, autoScrollRate, autoScrollDelta, clampToArea, liveCountText,
     isDownloadableUrl, majorityShouldCheck, plural, fitMenuAxis, clampMenuAxis,
@@ -1537,9 +1538,9 @@
   }
 
   // @test-only-begin
-  function logSave(i, k, status, t0) {
+  function logSave(i, k, status, t0, el) {
     if (!SAVE_LOG) return;
-    console.log(`[Snap Linkit] save ${i}/${k} ${status} ${Math.round(performance.now() - t0)} ms`);
+    console.log(saveLogLine(i, k, status, performance.now() - t0, el ? el.getAttribute('data-tpt-row-id') : null));
   }
   // @test-only-end
 
@@ -1574,7 +1575,7 @@
           clickedAt = i;
         } catch (error) {
           console.warn('[Snap Linkit] Could not toggle element:', el, error);
-          logSave(i, k, 'failed (click threw)', t0); // @test-only
+          logSave(i, k, 'failed (click threw)', t0, el); // @test-only
           stopAt('failed', i);
           break;
         }
@@ -1583,30 +1584,30 @@
           checked: isChecked(el), target, saving: el.classList.contains(SAVING_CLASS)
         });
         if (outcome !== 'saving') {
-          logSave(i, k, outcome, t0); // @test-only
+          logSave(i, k, outcome, t0, el); // @test-only
           stopAt(outcome === 'refused' ? (clicks === 1 ? 'refusedFirst' : 'refusedLater')
             : outcome === 'unconfirmed' ? 'unconfirmed' : 'failed', i);
           break;
         }
         const wait = await waitForSave(el, CHECKBOX_SAVE_TIMEOUT_MS);
         if (wait === 'timeout') {
-          logSave(i, k, 'timeout', t0); // @test-only
+          logSave(i, k, 'timeout', t0, el); // @test-only
           stopAt(el.isConnected ? 'timeout' : 'tableChanged', i);
           break;
         }
         if (isChecked(el) !== target) {
-          logSave(i, k, 'failed', t0); // @test-only
+          logSave(i, k, 'failed', t0, el); // @test-only
           stopAt('failed', i);
           break;
         }
         if (isDisabled(el)) {
-          logSave(i, k, 'unconfirmed (still disabled)', t0); // @test-only
+          logSave(i, k, 'unconfirmed (still disabled)', t0, el); // @test-only
           stopAt('unconfirmed', i);
           break;
         }
         c.n++;
         processed = i;
-        logSave(i, k, 'ok', t0); // @test-only
+        logSave(i, k, 'ok', t0, el); // @test-only
         if (i < k) await sleep(currentSaveGapMs());
       }
     } catch (error) {

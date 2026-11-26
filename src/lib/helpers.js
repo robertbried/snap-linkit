@@ -298,6 +298,14 @@
     ['topSpeed', 'count'],
     ['carried', ['no', 'last-seen']],
   ].map(Object.freeze));
+
+  // Test builds: the console line for one Fandom checkbox save (Rob's
+  // measurement). Item 20 (big run 2): it names the row saved, the way the
+  // drag line names its first and last rows.
+  //   [Snap Linkit] save 3/25 ok 183 ms row="Master Marksman"
+  function saveLogLine(i, k, status, ms, row) {
+    return `[Snap Linkit] save ${i}/${k} ${status} ${Math.round(ms)} ms row=${dragDiagName(row)}`;
+  }
   // @test-only-end
 
   // The toolbar badge (item 2). "!" when site access is missing wins over the
@@ -909,6 +917,7 @@
     dragDiagPx, // @test-only
     dragDiagLine, // @test-only
     DRAG_EXTRAS, // @test-only
+    saveLogLine, // @test-only
     anchorLostOutcome,
     saveGapMs,
     siteRunState,
