@@ -154,6 +154,9 @@
       attachEventListeners();
     } else if (!shouldRun && extensionActive) {
       extensionActive = false;
+      // An open confirm ("Open N tabs?", "Check N items?") goes as if cancelled:
+      // nothing it offered may start while Snap Linkit is off (ultrareview 2, #3)
+      if (confirmShowing()) confirmDialog.cancel();
       if (carefulRun) carefulRun.stop = true; // Escape no longer reaches us; stop before the next click
       detachEventListeners();
       cancelSelection('switched-off');
@@ -1207,6 +1210,12 @@
     cancelBtn.addEventListener('click', cancel);
     confirmBtn.addEventListener('click', () => {
       cleanup();
+      // Switched off while it showed (the switch-off closes it, so this is a
+      // second guard): the click counts as Cancel and nothing starts
+      if (!extensionActive) {
+        if (onCancel) onCancel();
+        return;
+      }
       onConfirm();
     });
     overlay.addEventListener('click', cancel);
