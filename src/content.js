@@ -11,7 +11,7 @@
     isOpenableUrl, matchesPattern, rectsIntersect, rectFromPoints, dragStartPoint,
     uniqueMatch, firstUsableAnchor, dragPageChangedMessage, dragStartFailedMessage, DRAG_OFF_REASONS, TRACKED_CHECKBOX_SELECTOR,
     dragDiagLine, // @test-only
-    dragFollowNeeded, trackingLock, fixedContainerAllows, anchorLostOutcome, releaseAfterCarryOn,
+    dragFollowNeeded, trackingLock, fixedContainerAllows, anchorLostOutcome, releaseAfterCarryOn, saveGapMs,
     autoScrollStep, autoScrollZone, autoScrollRate, autoScrollDelta, clampToArea, liveCountText,
     isDownloadableUrl, majorityShouldCheck, plural, fitMenuAxis, clampMenuAxis,
     normalizeReleaseAction, dragModifierMode, isStyleHidden, proxyLabelIndexes,
@@ -37,7 +37,7 @@
   // Careful saving of Fandom's tracking checkboxes (brief 2).
   // PROVISIONAL: every value below is a placeholder until Rob's measurement
   // (design decision 15). Not to ship as defaults without it.
-  const CHECKBOX_SAVE_GAP_MS = 150;       // PROVISIONAL: wait after each confirmed save (a popup slider replaces this later)
+  // The wait after each confirmed save is the popup's "Delay Between Saves" (settings.checkboxSaveGap, item 6)
   const CHECKBOX_SAVE_TIMEOUT_MS = 10000; // PROVISIONAL: T_box, the longest wait for one save
   const CHECKBOX_CONFIRM_ABOVE = 30;      // PROVISIONAL: ask first when more boxes than this need saving
   const CHECKBOX_SAVE_ESTIMATE_MS = 300;  // PROVISIONAL: assumed time of one save, used only for the confirm's estimate
@@ -1537,6 +1537,12 @@
     });
   }
 
+  // The "Delay Between Saves" setting, read at each wait so a change in the
+  // popup applies to the next save; a bad stored value falls back to the default
+  function currentSaveGapMs() {
+    return saveGapMs(settings.checkboxSaveGap, SnapLinkitDefaults().checkboxSaveGap);
+  }
+
   // @test-only-begin
   function logSave(i, k, status, t0) {
     if (!SAVE_LOG) return;
@@ -1608,7 +1614,7 @@
         c.n++;
         processed = i;
         logSave(i, k, 'ok', t0); // @test-only
-        if (i < k) await sleep(CHECKBOX_SAVE_GAP_MS);
+        if (i < k) await sleep(currentSaveGapMs());
       }
     } catch (error) {
       // A fault in Snap Linkit itself: say so rather than report a result
@@ -1698,7 +1704,7 @@
       let shown;
       try {
         shown = showConfirmDialog(
-          carefulConfirmText(target, queue.length, CHECKBOX_SAVE_GAP_MS + CHECKBOX_SAVE_ESTIMATE_MS),
+          carefulConfirmText(target, queue.length, currentSaveGapMs() + CHECKBOX_SAVE_ESTIMATE_MS),
           start,
           () => {
             // Cancel clicks nothing (ordinary boxes were already done)

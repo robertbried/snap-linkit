@@ -300,6 +300,24 @@
   ].map(Object.freeze));
   // @test-only-end
 
+  // The checkbox save delay setting (item 6, the popup slider): a whole number
+  // of ms from 0 to 2000; out-of-range values are clamped. Anything else
+  // (missing, not a number) falls back to the default the caller passes, and
+  // if that is no good either, to 150 ms: the wait is never NaN (which would
+  // not wait at all).
+  const SAVE_GAP_MAX_MS = 2000;
+  const SAVE_GAP_DEFAULT_MS = 150;
+  function saveGapMs(value, fallback) {
+    const ms = (x) => {
+      const v = typeof x === 'number' ? x : typeof x === 'string' && x.trim() !== '' ? Number(x) : NaN;
+      return Number.isFinite(v) ? Math.min(SAVE_GAP_MAX_MS, Math.max(0, Math.round(v))) : null;
+    };
+    const a = ms(value);
+    if (a !== null) return a;
+    const b = ms(fallback);
+    return b !== null ? b : SAVE_GAP_DEFAULT_MS;
+  }
+
   // The pressed element is gone for good mid-drag (removed, or 0x0, and not
   // found again uniquely). What happens to the drag (ultrareview 1, #1):
   //   'cancel'   a drag locked to Fandom tracking boxes (B's lock): a start no
@@ -860,6 +878,9 @@
     dragDiagLine, // @test-only
     DRAG_EXTRAS, // @test-only
     anchorLostOutcome,
+    saveGapMs,
+    SAVE_GAP_MAX_MS,
+    SAVE_GAP_DEFAULT_MS,
     releaseAfterCarryOn,
     dragFollowNeeded,
     autoScrollStep,

@@ -11,7 +11,7 @@ test('SnapLinkitLib exposes every helper and is frozen', () => {
     'carefulProgressMessage', 'carefulFallbackMessage', 'carefulNotStartedMessage', 'clampMenuAxis', 'faultMatches', 'dragModifierMode', 'filenameFromUrl', 'fitMenuAxis', 'formatDurationEstimate', 'formatShortcut',
     'isDownloadableUrl', 'isOpenableUrl', 'isStyleHidden', 'isTrackedCheckbox', 'isValidPattern', 'isVersionBefore', 'majorityShouldCheck',
     'matchesPattern', 'normalizeReleaseAction', 'ordinaryCheckboxMessage', 'ordinaryUnreadMessage', 'plural',
-    'proxyLabelIndexes', 'rectsIntersect', 'selectionRect', 'rectFromPoints', 'dragStartPoint', 'uniqueMatch', 'firstUsableAnchor', 'dragPageChangedMessage', 'dragStartFailedMessage', 'DRAG_OFF_REASONS', 'DRAG_ENDS', 'dragDiagName', 'dragDiagPx', 'dragDiagLine', 'DRAG_EXTRAS', 'anchorLostOutcome', 'releaseAfterCarryOn', 'dragFollowNeeded', 'trackingLock', 'fixedContainerAllows', 'autoScrollStep', 'autoScrollZone', 'AUTO_SCROLL_CREEP', 'AUTO_SCROLL_CAP', 'autoScrollRate', 'autoScrollDelta', 'clampToArea', 'liveCountText', 'selectableVerdict', 'labelMapFrom', 'touchesSelection', 'onlyOwnClassChange', 'pageChangeMarksStale', 'shouldOfferWhatsNew', 'whatsNewLines', 'whatsNewRecord', 'whatsNewShowsShortcuts',
+    'proxyLabelIndexes', 'rectsIntersect', 'selectionRect', 'rectFromPoints', 'dragStartPoint', 'uniqueMatch', 'firstUsableAnchor', 'dragPageChangedMessage', 'dragStartFailedMessage', 'DRAG_OFF_REASONS', 'DRAG_ENDS', 'dragDiagName', 'dragDiagPx', 'dragDiagLine', 'DRAG_EXTRAS', 'anchorLostOutcome', 'releaseAfterCarryOn', 'saveGapMs', 'SAVE_GAP_MAX_MS', 'SAVE_GAP_DEFAULT_MS', 'dragFollowNeeded', 'trackingLock', 'fixedContainerAllows', 'autoScrollStep', 'autoScrollZone', 'AUTO_SCROLL_CREEP', 'AUTO_SCROLL_CAP', 'autoScrollRate', 'autoScrollDelta', 'clampToArea', 'liveCountText', 'selectableVerdict', 'labelMapFrom', 'touchesSelection', 'onlyOwnClassChange', 'pageChangeMarksStale', 'shouldOfferWhatsNew', 'whatsNewLines', 'whatsNewRecord', 'whatsNewShowsShortcuts',
   ].sort());
   assert.ok(Object.isFrozen(lib));
   assert.equal(globalThis.SnapLinkitLib, lib);
@@ -409,6 +409,24 @@ test('dragDiagLine: the agreed regex parses a full line, every later field in DR
     'selected', 'boxes', 'links', 'first', 'last', 'updates', 'slowest', 'scrollPause', 'rebuilds',
     ...lib.DRAG_EXTRAS.map(([k]) => k)]);
   assert.deepEqual([f.follows, f.lock, f.fixedOut, f.topSpeed, f.carried], ['3', 'none', '1', '1250', 'last-seen']);
+});
+
+test('saveGapMs (item 6): the save delay setting, whole ms from 0 to 2000; anything else falls back to the default', () => {
+  assert.equal(lib.SAVE_GAP_MAX_MS, 2000);
+  assert.equal(lib.saveGapMs(150, 150), 150);
+  assert.equal(lib.saveGapMs(0, 150), 0);
+  assert.equal(lib.saveGapMs(2000, 150), 2000);
+  assert.equal(lib.saveGapMs(2500, 150), 2000);   // clamped
+  assert.equal(lib.saveGapMs(-50, 150), 0);       // clamped
+  assert.equal(lib.saveGapMs(149.6, 150), 150);   // whole ms
+  assert.equal(lib.saveGapMs('600', 150), 600);   // a stored string still works
+  for (const bad of [undefined, null, NaN, Infinity, '', ' ', 'fast', {}, []]) assert.equal(lib.saveGapMs(bad, 150), 150, String(bad));
+  // the fallback is checked too: never NaN (a NaN wait would not wait at all; the lab's bad-default variant found it)
+  assert.equal(lib.SAVE_GAP_DEFAULT_MS, 150);
+  assert.equal(lib.saveGapMs('fast', 'slow'), 150);
+  assert.equal(lib.saveGapMs(undefined, undefined), 150);
+  assert.equal(lib.saveGapMs(undefined, 600), 600);
+  assert.equal(lib.saveGapMs(undefined, 5000), 2000);
 });
 
 test('autoScrollStep: both directions, always instant (brief 7b)', () => {

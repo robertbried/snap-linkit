@@ -63,12 +63,14 @@
     elements.autoScrollSpeed = document.getElementById('autoScrollSpeed');
     elements.maxTabsWithoutConfirm = document.getElementById('maxTabsWithoutConfirm');
     elements.tabOpenDelay = document.getElementById('tabOpenDelay');
+    elements.checkboxSaveGap = document.getElementById('checkboxSaveGap');
 
     // Value displays
     elements.scrollEdgeThresholdValue = document.getElementById('scrollEdgeThresholdValue');
     elements.autoScrollSpeedValue = document.getElementById('autoScrollSpeedValue');
     elements.maxTabsWithoutConfirmValue = document.getElementById('maxTabsWithoutConfirmValue');
     elements.tabOpenDelayValue = document.getElementById('tabOpenDelayValue');
+    elements.checkboxSaveGapValue = document.getElementById('checkboxSaveGapValue');
 
     // When I let go
     elements.releaseAction = document.getElementById('releaseAction');
@@ -152,7 +154,7 @@
 
   function bindEvents() {
     // Slider events - update value display on input, save on change
-    const sliders = ['scrollEdgeThreshold', 'autoScrollSpeed', 'maxTabsWithoutConfirm', 'tabOpenDelay'];
+    const sliders = ['scrollEdgeThreshold', 'autoScrollSpeed', 'maxTabsWithoutConfirm', 'tabOpenDelay', 'checkboxSaveGap'];
     sliders.forEach(id => {
       const slider = elements[id];
       const valueDisplay = elements[`${id}Value`];
@@ -225,7 +227,7 @@
 
   function updateUI() {
     // Update sliders and value displays
-    const sliders = ['scrollEdgeThreshold', 'autoScrollSpeed', 'maxTabsWithoutConfirm', 'tabOpenDelay'];
+    const sliders = ['scrollEdgeThreshold', 'autoScrollSpeed', 'maxTabsWithoutConfirm', 'tabOpenDelay', 'checkboxSaveGap'];
     sliders.forEach(id => {
       if (elements[id]) {
         elements[id].value = currentSettings[id];

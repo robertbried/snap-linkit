@@ -15,5 +15,9 @@ globalThis.SnapLinkitDefaults = function SnapLinkitDefaults() {
     extensionEnabled: true,
     // What a plain right-drag release over links does (lib/helpers.js RELEASE_ACTIONS)
     releaseAction: 'open',
+    // Fandom tracking boxes are saved one at a time: the extra wait after each
+    // confirmed save, in ms (0-2000; lib/helpers.js saveGapMs). PROVISIONAL
+    // until Rob's measurement (decision 15).
+    checkboxSaveGap: 150,
   };
 };
