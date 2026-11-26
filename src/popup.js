@@ -7,7 +7,7 @@
   'use strict';
 
   // Pure helpers live in lib/helpers.js (loaded first by popup.html)
-  const { isValidPattern, blacklistBytes, whatsNewLines, whatsNewShowsShortcuts, normalizeReleaseAction } = globalThis.SnapLinkitLib;
+  const { isValidPattern, blacklistBytes, whatsNewLines, whatsNewShowsShortcuts, normalizeReleaseAction, siteRunState } = globalThis.SnapLinkitLib;
 
   const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
 
@@ -37,6 +37,7 @@
   document.addEventListener('DOMContentLoaded', async () => {
     cacheElements();
     await loadSettings();
+    await loadActiveHost();
     bindEvents();
     updateUI();
     showVersion();
@@ -55,6 +56,7 @@
     if (area !== 'sync' || !('extensionEnabled' in changes) || !elements.extensionEnabled) return;
     currentSettings.extensionEnabled = changes.extensionEnabled.newValue !== false;
     elements.extensionEnabled.checked = currentSettings.extensionEnabled;
+    renderSiteState();
   });
 
   function cacheElements() {
@@ -92,6 +94,12 @@
     // Host-permission banner
     elements.permissionBanner = document.getElementById('permissionBanner');
     elements.grantAccessBtn = document.getElementById('grantAccessBtn');
+
+    // Why Snap Linkit does nothing on this tab (item 3)
+    elements.siteStateBanner = document.getElementById('siteStateBanner');
+    elements.siteStateText = document.getElementById('siteStateText');
+    elements.siteStateFixBtn = document.getElementById('siteStateFixBtn');
+    elements.siteStateEditBtn = document.getElementById('siteStateEditBtn');
 
     // What's new note (Info tab)
     elements.whatsNew = document.getElementById('whatsNew');
@@ -174,6 +182,7 @@
       elements.extensionEnabled.addEventListener('change', (e) => {
         currentSettings.extensionEnabled = e.target.checked;
         saveSettings();
+        renderSiteState();
       });
     }
 
@@ -191,6 +200,7 @@
         currentSettings.blacklistMode = e.target.value;
         saveSettings();
         updateModeLabel();
+        renderSiteState();
       });
     }
 
@@ -217,6 +227,14 @@
     // "Grant access" in the host-permission banner
     if (elements.grantAccessBtn) {
       elements.grantAccessBtn.addEventListener('click', requestHostAccess);
+    }
+
+    // The site-state banner's buttons (item 3)
+    if (elements.siteStateFixBtn) {
+      elements.siteStateFixBtn.addEventListener('click', fixSiteState);
+    }
+    if (elements.siteStateEditBtn) {
+      elements.siteStateEditBtn.addEventListener('click', editSiteRules);
     }
 
     // "Got it" on the what's new note
@@ -257,6 +275,7 @@
 
     // Render blacklist
     renderBlacklist();
+    renderSiteState();
   }
 
   // ---- Host access (site permission) ----
@@ -314,6 +333,80 @@
         event.addListener(checkHostAccess);
       }
     }
+  }
+
+  // ---- Why Snap Linkit does nothing on this tab (item 3) ----
+  // Wording from issue-1/PRODUCT-ISSUE-SILENT-STATES.md. Switched off applies to
+  // every tab; a site rule only to the active tab's site (http/https only: it
+  // never runs elsewhere anyway). The rule is siteRunState, shared with content.js.
+  let activeHost = null;
+
+  async function loadActiveHost() {
+    activeHost = null;
+    try {
+      const [tab] = await browserAPI.tabs.query({ active: true, currentWindow: true });
+      const url = tab && typeof tab.url === 'string' ? new URL(tab.url) : null;
+      if (url && (url.protocol === 'http:' || url.protocol === 'https:')) activeHost = url.hostname;
+    } catch (error) {
+      // No URL (no access to this tab): only "switched off" can be shown
+      activeHost = null;
+    }
+  }
+
+  function siteState() {
+    return siteRunState({
+      enabled: currentSettings.extensionEnabled !== false, mode: currentSettings.blacklistMode,
+      patterns: currentSettings.blacklist || [], hostname: activeHost || '',
+    });
+  }
+
+  function renderSiteState() {
+    const banner = elements.siteStateBanner, text = elements.siteStateText;
+    if (!banner || !text) return;
+    const st = siteState();
+    const reason = st.reason === 'off' || (activeHost && st.reason) ? st.reason : null;
+    text.replaceChildren();
+    if (reason === 'off') {
+      text.append('Snap Linkit is switched off.');
+    } else if (reason === 'blocked') {
+      const code = document.createElement('code');
+      code.textContent = st.rule;
+      text.append('Snap Linkit is off on this site (rule: ', code, ').');
+    } else if (reason === 'notListed') {
+      text.append('Snap Linkit is off on this site: it isn\u2019t on your \u201cEnabled only on\u201d list.');
+    }
+    banner.hidden = !reason;
+    banner.setAttribute('data-reason', reason || '');
+    if (elements.siteStateFixBtn) {
+      elements.siteStateFixBtn.hidden = !(reason === 'off' || reason === 'blocked');
+      elements.siteStateFixBtn.textContent = reason === 'off' ? 'Switch on' : 'Remove rule';
+    }
+    if (elements.siteStateEditBtn) elements.siteStateEditBtn.hidden = !(reason === 'blocked' || reason === 'notListed');
+  }
+
+  // "Switch on" or "Remove rule". Open pages pick the change up straight away (content.js listens for it).
+  function fixSiteState() {
+    const st = siteState();
+    if (st.reason === 'off') {
+      currentSettings.extensionEnabled = true;
+      if (elements.extensionEnabled) elements.extensionEnabled.checked = true;
+    } else if (st.reason === 'blocked' && activeHost) {
+      const i = currentSettings.blacklist.indexOf(st.rule);
+      if (i < 0) return;
+      currentSettings.blacklist.splice(i, 1);
+      renderBlacklist();
+    } else {
+      return;
+    }
+    saveSettings();
+    renderSiteState();
+  }
+
+  // "Edit rules": the Settings tab, with the cursor in the site list's input
+  function editSiteRules() {
+    const settingsTab = document.getElementById('tab-settings');
+    if (settingsTab) settingsTab.checked = true;
+    if (elements.blacklistInput && typeof elements.blacklistInput.focus === 'function') elements.blacklistInput.focus();
   }
 
   // ---- What's new note (1.4.0, plus the 1.3.0 shortcut lines) ----
@@ -458,6 +551,7 @@
     input.value = '';
     saveSettings();
     renderBlacklist();
+    renderSiteState();
   }
 
   function showInputError(input, message) {
@@ -473,6 +567,7 @@
     currentSettings.blacklist.splice(index, 1);
     saveSettings();
     renderBlacklist();
+    renderSiteState();
   }
 
   async function resetToDefaults() {

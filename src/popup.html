@@ -90,6 +90,23 @@
       padding: 4px 12px;
     }
 
+    /* Why Snap Linkit does nothing on this tab (item 3): switched off, or a site rule. Amber, not red: a choice, not an error */
+    .permission-banner.site-state {
+      color: #ffcc66;
+      border-bottom-color: #ffcc66;
+    }
+
+    .site-state code {
+      font-family: monospace;
+      color: #ffffff;
+    }
+
+    .site-state-buttons {
+      display: flex;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+
     /* "What's new" note at the top of the Info tab (shown by popup.js until "Got it") */
     .whats-new {
       padding: 8px 12px;
@@ -616,6 +633,16 @@
   <div class="permission-banner" id="permissionBanner" hidden>
     <span>Needs website access to work.</span>
     <button class="add-btn" id="grantAccessBtn">Grant access</button>
+  </div>
+
+  <!-- Why Snap Linkit does nothing on this tab (item 3): hidden unless popup.js finds it switched off,
+       or the current site excluded by a rule under Site Filtering -->
+  <div class="permission-banner site-state" id="siteStateBanner" hidden>
+    <span id="siteStateText"></span>
+    <span class="site-state-buttons">
+      <button class="add-btn" id="siteStateFixBtn" hidden></button>
+      <button class="add-btn" id="siteStateEditBtn" hidden>Edit rules</button>
+    </span>
   </div>
 
   <!-- Tab Labels -->

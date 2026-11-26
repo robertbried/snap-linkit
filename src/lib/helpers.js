@@ -300,6 +300,23 @@
   ].map(Object.freeze));
   // @test-only-end
 
+  // Does Snap Linkit run on this site, and if not, why? The one rule content.js
+  // and the popup share (item 3: the popup says why it does nothing here).
+  //   { enabled, mode, patterns, hostname }  mode 'blacklist' = "Disabled on:";
+  //                                          any other mode = "Enabled only on:"
+  //   -> { runs, reason, rule }
+  //      reason 'off'        switched off (the toggle or Alt+Shift+L)
+  //             'blocked'    "Disabled on:" and `rule` (the first matching pattern) matches
+  //             'notListed'  "Enabled only on:" and no pattern matches
+  //             null         it runs (`rule`: the matching pattern in "Enabled only on:", else null)
+  function siteRunState(f) {
+    if (!f || !f.enabled) return { runs: false, reason: 'off', rule: null };
+    const patterns = Array.isArray(f.patterns) ? f.patterns : [];
+    const rule = patterns.find((p) => matchesPattern(f.hostname, p)) || null;
+    if (f.mode === 'blacklist') return rule ? { runs: false, reason: 'blocked', rule } : { runs: true, reason: null, rule: null };
+    return rule ? { runs: true, reason: null, rule } : { runs: false, reason: 'notListed', rule: null };
+  }
+
   // The checkbox save delay setting (item 6, the popup slider): a whole number
   // of ms from 0 to 2000; out-of-range values are clamped. Anything else
   // (missing, not a number) falls back to the default the caller passes, and
@@ -879,6 +896,7 @@
     DRAG_EXTRAS, // @test-only
     anchorLostOutcome,
     saveGapMs,
+    siteRunState,
     SAVE_GAP_MAX_MS,
     SAVE_GAP_DEFAULT_MS,
     releaseAfterCarryOn,

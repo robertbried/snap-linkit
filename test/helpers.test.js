@@ -11,7 +11,7 @@ test('SnapLinkitLib exposes every helper and is frozen', () => {
     'carefulProgressMessage', 'carefulFallbackMessage', 'carefulNotStartedMessage', 'clampMenuAxis', 'faultMatches', 'dragModifierMode', 'filenameFromUrl', 'fitMenuAxis', 'formatDurationEstimate', 'formatShortcut',
     'isDownloadableUrl', 'isOpenableUrl', 'isStyleHidden', 'isTrackedCheckbox', 'isValidPattern', 'isVersionBefore', 'majorityShouldCheck',
     'matchesPattern', 'normalizeReleaseAction', 'ordinaryCheckboxMessage', 'ordinaryUnreadMessage', 'plural',
-    'proxyLabelIndexes', 'rectsIntersect', 'selectionRect', 'rectFromPoints', 'dragStartPoint', 'uniqueMatch', 'firstUsableAnchor', 'dragPageChangedMessage', 'dragStartFailedMessage', 'DRAG_OFF_REASONS', 'DRAG_ENDS', 'dragDiagName', 'dragDiagPx', 'dragDiagLine', 'DRAG_EXTRAS', 'anchorLostOutcome', 'releaseAfterCarryOn', 'saveGapMs', 'SAVE_GAP_MAX_MS', 'SAVE_GAP_DEFAULT_MS', 'dragFollowNeeded', 'trackingLock', 'fixedContainerAllows', 'autoScrollStep', 'autoScrollZone', 'AUTO_SCROLL_CREEP', 'AUTO_SCROLL_CAP', 'autoScrollRate', 'autoScrollDelta', 'clampToArea', 'liveCountText', 'selectableVerdict', 'labelMapFrom', 'touchesSelection', 'onlyOwnClassChange', 'pageChangeMarksStale', 'shouldOfferWhatsNew', 'whatsNewLines', 'whatsNewRecord', 'whatsNewShowsShortcuts',
+    'proxyLabelIndexes', 'rectsIntersect', 'selectionRect', 'rectFromPoints', 'dragStartPoint', 'uniqueMatch', 'firstUsableAnchor', 'dragPageChangedMessage', 'dragStartFailedMessage', 'DRAG_OFF_REASONS', 'DRAG_ENDS', 'dragDiagName', 'dragDiagPx', 'dragDiagLine', 'DRAG_EXTRAS', 'anchorLostOutcome', 'releaseAfterCarryOn', 'saveGapMs', 'SAVE_GAP_MAX_MS', 'SAVE_GAP_DEFAULT_MS', 'siteRunState', 'dragFollowNeeded', 'trackingLock', 'fixedContainerAllows', 'autoScrollStep', 'autoScrollZone', 'AUTO_SCROLL_CREEP', 'AUTO_SCROLL_CAP', 'autoScrollRate', 'autoScrollDelta', 'clampToArea', 'liveCountText', 'selectableVerdict', 'labelMapFrom', 'touchesSelection', 'onlyOwnClassChange', 'pageChangeMarksStale', 'shouldOfferWhatsNew', 'whatsNewLines', 'whatsNewRecord', 'whatsNewShowsShortcuts',
   ].sort());
   assert.ok(Object.isFrozen(lib));
   assert.equal(globalThis.SnapLinkitLib, lib);
@@ -409,6 +409,23 @@ test('dragDiagLine: the agreed regex parses a full line, every later field in DR
     'selected', 'boxes', 'links', 'first', 'last', 'updates', 'slowest', 'scrollPause', 'rebuilds',
     ...lib.DRAG_EXTRAS.map(([k]) => k)]);
   assert.deepEqual([f.follows, f.lock, f.fixedOut, f.topSpeed, f.carried], ['3', 'none', '1', '1250', 'last-seen']);
+});
+
+test('siteRunState (item 3): the one on/off rule content.js and the popup share, with the reason', () => {
+  const st = (o) => lib.siteRunState({ enabled: true, mode: 'blacklist', patterns: [], hostname: 'leagueoflegends.fandom.com', ...o });
+  assert.deepEqual(st({}), { runs: true, reason: null, rule: null });
+  assert.deepEqual(st({ enabled: false }), { runs: false, reason: 'off', rule: null });
+  assert.deepEqual(st({ enabled: false, patterns: ['*.fandom.com'] }), { runs: false, reason: 'off', rule: null }); // off wins
+  assert.deepEqual(st({ patterns: ['*.google.com', '*.fandom.com', 'leagueoflegends.fandom.com'] }), { runs: false, reason: 'blocked', rule: '*.fandom.com' });
+  assert.deepEqual(st({ patterns: ['*.google.com'] }), { runs: true, reason: null, rule: null });
+  // "Enabled only on:" (any mode but 'blacklist', as content.js always treated it)
+  assert.deepEqual(st({ mode: 'whitelist', patterns: [] }), { runs: false, reason: 'notListed', rule: null });
+  assert.deepEqual(st({ mode: 'whitelist', patterns: ['*.fandom.com'] }), { runs: true, reason: null, rule: '*.fandom.com' });
+  assert.deepEqual(st({ mode: 'other', patterns: ['*.google.com'] }), { runs: false, reason: 'notListed', rule: null });
+  // content.js's old rule: off when extensionEnabled is not truthy
+  assert.equal(st({ enabled: undefined }).reason, 'off');
+  assert.equal(lib.siteRunState(null).reason, 'off');
+  assert.deepEqual(st({ patterns: null }), { runs: true, reason: null, rule: null });
 });
 
 test('saveGapMs (item 6): the save delay setting, whole ms from 0 to 2000; anything else falls back to the default', () => {

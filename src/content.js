@@ -11,7 +11,7 @@
     isOpenableUrl, matchesPattern, rectsIntersect, rectFromPoints, dragStartPoint,
     uniqueMatch, firstUsableAnchor, dragPageChangedMessage, dragStartFailedMessage, DRAG_OFF_REASONS, TRACKED_CHECKBOX_SELECTOR,
     dragDiagLine, // @test-only
-    dragFollowNeeded, trackingLock, fixedContainerAllows, anchorLostOutcome, releaseAfterCarryOn, saveGapMs,
+    dragFollowNeeded, trackingLock, fixedContainerAllows, anchorLostOutcome, releaseAfterCarryOn, saveGapMs, siteRunState,
     autoScrollStep, autoScrollZone, autoScrollRate, autoScrollDelta, clampToArea, liveCountText,
     isDownloadableUrl, majorityShouldCheck, plural, fitMenuAxis, clampMenuAxis,
     normalizeReleaseAction, dragModifierMode, isStyleHidden, proxyLabelIndexes,
@@ -136,20 +136,13 @@
   // BLACKLIST / WHITELIST
   // ============================================
 
-  function isOnList(hostname) {
-    const patterns = settings.blacklist || [];
-    return patterns.some(pattern => matchesPattern(hostname, pattern));
-  }
-
+  // On or off here, from the toggle and the site rules: the same rule the popup
+  // uses to say why (siteRunState, item 3)
   function shouldRunOnCurrentSite() {
-    if (!settings.extensionEnabled) return false;
-
-    const hostname = window.location.hostname;
-    const onList = isOnList(hostname);
-
-    // Blacklist mode: run unless on list
-    // Whitelist mode: run only if on list
-    return settings.blacklistMode === 'blacklist' ? !onList : onList;
+    return siteRunState({
+      enabled: settings.extensionEnabled, mode: settings.blacklistMode,
+      patterns: settings.blacklist || [], hostname: window.location.hostname,
+    }).runs;
   }
 
   function updateExtensionState() {
