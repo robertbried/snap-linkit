@@ -1573,7 +1573,7 @@
     carefulRun = run;
     const c = { target, m: pre.m, k, n: 0, i: 0, rest: 0, already: pre.already, disabled: pre.disabled,
       timeoutSec: CHECKBOX_SAVE_TIMEOUT_MS / 1000, kind: 'done' };
-    let processed = 0; // queue positions dealt with (saved, skipped, or where the run stopped)
+    let processed = 0; // queue positions dealt with (saved, skipped, or clicked where the run stopped)
     let clicks = 0;
     let clickedAt = 0; // the queue position last clicked
     const stopAt = (kind, i) => { c.kind = kind; c.i = i; processed = i; };
@@ -1583,7 +1583,7 @@
         const i = idx + 1;
         if (run.stop) { c.kind = 'esc'; break; }
         // Check the box again just before clicking: earlier saves took time
-        if (!el.isConnected) { stopAt('tableChanged', i); break; }
+        if (!el.isConnected) { stopAt('tableChanged', i); processed = i - 1; break; } // never clicked: still "not tried"
         if (isDisabled(el)) { c.disabled++; processed = i; continue; }
         if (isChecked(el) === target) { c.already++; processed = i; continue; }
 

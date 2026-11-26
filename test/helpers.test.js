@@ -953,8 +953,9 @@ test('carefulCheckboxMessage: refused click, first box and later box', () => {
 test('carefulCheckboxMessage: changed but no save seen; table changed; internal error', () => {
   assert.equal(cm({ kind: 'unconfirmed', target: true, n: 0, k: 10, i: 1 }),
     "Stopped: item 1 changed, but Snap Linkit couldn't confirm it was saved. Reload to check. 0 checked and saved.");
-  assert.equal(cm({ kind: 'tableChanged', target: true, n: 5, k: 10, i: 6, rest: 4 }),
-    'Stopped: the table changed while saving. 5 checked and saved; 4 not tried.');
+  // Item 6 left the page before its click, so it is one of the 5 not tried (ultrareview 2, #4)
+  assert.equal(cm({ kind: 'tableChanged', target: true, n: 5, k: 10, i: 6, rest: 5 }),
+    'Stopped: the table changed while saving. 5 checked and saved; 5 not tried.');
   assert.equal(cm({ kind: 'error', target: false, n: 2, k: 10, i: 3, rest: 7 }),
     'Stopped: Snap Linkit hit an error at item 3 of 10. 2 unchecked and saved; 7 not tried.');
   assert.throws(() => cm({ kind: 'nope', target: true }), /unknown kind/);
