@@ -38,7 +38,9 @@
   outline-offset: 2px !important;
   background-color: rgba(191, 0, 255, 0.15) !important;
   box-shadow: 0 0 8px rgba(191, 0, 255, 0.6) !important;
-  transition: all 0.08s ease-out !important;
+  /* Only what the highlight itself changes fades (big run 2): "all" also animated every change the page made to a
+     highlighted element (size, position, ...) for 0.08 s */
+  transition: outline-color 0.08s ease-out, background-color 0.08s ease-out, box-shadow 0.08s ease-out !important;
 }
 
 /* Action Menu
