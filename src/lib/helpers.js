@@ -300,6 +300,21 @@
   ].map(Object.freeze));
   // @test-only-end
 
+  // The toolbar badge (item 2). "!" when site access is missing wins over the
+  // what's-new "NEW"; with neither, no badge and the manifest's own title.
+  //   { hostAccess, whatsNewBadge }  hostAccess: true, false (missing) or null
+  //                                  (unknown: never shows "!")
+  //   -> { text, color, textColor, title }  text '' and title null: no badge,
+  //                                          the manifest's default title
+  const ACCESS_BADGE = Object.freeze({ text: '!', color: '#ff4444', textColor: '#ffffff', title: 'Snap Linkit needs site access. Click to fix' });
+  const WHATS_NEW_BADGE = Object.freeze({ text: 'NEW', color: '#bf00ff', textColor: '#ffffff', title: "Snap Linkit: see what's new" });
+  const NO_BADGE = Object.freeze({ text: '', color: null, textColor: null, title: null });
+  function toolbarBadge(f) {
+    if (f && f.hostAccess === false) return ACCESS_BADGE;
+    if (f && f.whatsNewBadge === true) return WHATS_NEW_BADGE;
+    return NO_BADGE;
+  }
+
   // Does Snap Linkit run on this site, and if not, why? The one rule content.js
   // and the popup share (item 3: the popup says why it does nothing here).
   //   { enabled, mode, patterns, hostname }  mode 'blacklist' = "Disabled on:";
@@ -897,6 +912,7 @@
     anchorLostOutcome,
     saveGapMs,
     siteRunState,
+    toolbarBadge,
     SAVE_GAP_MAX_MS,
     SAVE_GAP_DEFAULT_MS,
     releaseAfterCarryOn,

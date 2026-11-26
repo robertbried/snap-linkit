@@ -7,7 +7,7 @@
   'use strict';
 
   // Pure helpers live in lib/helpers.js (loaded first by popup.html)
-  const { isValidPattern, blacklistBytes, whatsNewLines, whatsNewShowsShortcuts, normalizeReleaseAction, siteRunState } = globalThis.SnapLinkitLib;
+  const { isValidPattern, blacklistBytes, whatsNewLines, whatsNewShowsShortcuts, normalizeReleaseAction, siteRunState, toolbarBadge } = globalThis.SnapLinkitLib;
 
   const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
 
@@ -416,6 +416,22 @@
   // are in popup.html. The shortcut lines (update from before 1.3.0) are
   // rebuilt from the current shortcuts, so one customised since is left out.
   async function clearWhatsNewBadge() {
+    // Without site access the badge stays "!" (item 2: it wins over "NEW")
+    const api = permissionsApi();
+    let access = null;
+    try {
+      access = api ? (await api.contains({ origins: HOST_ORIGINS })) === true : null;
+    } catch (error) {
+      access = null;
+    }
+    const badge = toolbarBadge({ hostAccess: access, whatsNewBadge: false });
+    if (badge.text) {
+      await browserAPI.action.setBadgeText({ text: badge.text });
+      await browserAPI.action.setBadgeBackgroundColor({ color: badge.color });
+      await browserAPI.action.setBadgeTextColor({ color: badge.textColor });
+      await browserAPI.action.setTitle({ title: badge.title });
+      return;
+    }
     await browserAPI.action.setBadgeText({ text: '' });
     // Back to the manifest's tooltip. Not null: Firefox accepts null as "reset", but
     // Chrome's action.setTitle requires a string and rejects null.

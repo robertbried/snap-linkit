@@ -7,7 +7,7 @@ const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
 
 // Pure helpers live in lib/helpers.js (loaded first by the manifest)
 const {
-  isOpenableUrl, filenameFromUrl, shouldOfferWhatsNew, whatsNewRecord, isVersionBefore
+  isOpenableUrl, filenameFromUrl, shouldOfferWhatsNew, whatsNewRecord, isVersionBefore, toolbarBadge
 } = globalThis.SnapLinkitLib;
 
 // ============================================
@@ -28,32 +28,61 @@ browserAPI.commands.onCommand.addListener(async (command) => {
 });
 
 // ============================================
-// "WHAT'S NEW" NOTICE (1.4.0; plus the 1.3.0 shortcut lines for older versions)
+// TOOLBAR BADGE: "!" WITHOUT SITE ACCESS (item 2), ELSE "NEW" (1.4.0's what's new)
 // ============================================
 // storage.local "whatsNew" = { version, badge, shortcuts }. Set here on an
 // update from before 1.4.0; popup.js sets badge to false when the popup first
-// opens and removes the key on "Got it". The toolbar badge does not survive a
-// browser restart, so onStartup puts it back while badge is still true. Both
-// listeners are registered at the top level so the background page wakes.
-const WHATS_NEW_TITLE = "Snap Linkit: see what's new";
+// opens and removes the key on "Got it". Without site access Snap Linkit can't
+// run on any page, so the badge says "!" instead (it wins over "NEW"; the popup
+// explains and offers "Grant access"). The badge does not survive a browser
+// restart, so onStartup sets it again; it is also checked when the background
+// starts and whenever site access is granted or removed. Every listener is
+// registered at the top level so the background page wakes.
+const HOST_ORIGINS = ['http://*/*', 'https://*/*']; // = host_permissions in manifest.json (and popup.js)
 
-async function showWhatsNewBadge() {
-  await browserAPI.action.setBadgeText({ text: 'NEW' });
-  await browserAPI.action.setBadgeBackgroundColor({ color: '#bf00ff' });
-  await browserAPI.action.setBadgeTextColor({ color: '#ffffff' });
-  await browserAPI.action.setTitle({ title: WHATS_NEW_TITLE });
+// true / false, or null when it can't be told (then "!" is never shown)
+async function hostAccessGranted() {
+  const api = browserAPI.permissions;
+  if (!api || typeof api.contains !== 'function') return null;
+  try {
+    return (await api.contains({ origins: HOST_ORIGINS })) === true;
+  } catch (error) {
+    console.warn('Snap Linkit: could not check site access:', error?.message);
+    return null;
+  }
+}
+
+// Set the badge the state asks for. With nothing to show, only a badge Snap
+// Linkit set (its "!") is cleared, so a restart or a fresh install touches nothing.
+async function refreshToolbarBadge() {
+  const [access, { whatsNew }] = await Promise.all([hostAccessGranted(), browserAPI.storage.local.get('whatsNew')]);
+  const badge = toolbarBadge({ hostAccess: access, whatsNewBadge: Boolean(whatsNew && whatsNew.badge === true) });
+  if (badge.text) {
+    await browserAPI.action.setBadgeText({ text: badge.text });
+    await browserAPI.action.setBadgeBackgroundColor({ color: badge.color });
+    await browserAPI.action.setBadgeTextColor({ color: badge.textColor });
+    await browserAPI.action.setTitle({ title: badge.title });
+    return;
+  }
+  const shown = typeof browserAPI.action.getBadgeText === 'function' ? await browserAPI.action.getBadgeText({}) : '';
+  if (shown === toolbarBadge({ hostAccess: false }).text) {
+    await browserAPI.action.setBadgeText({ text: '' });
+    // Not null: Chrome's action.setTitle requires a string
+    await browserAPI.action.setTitle({ title: browserAPI.runtime.getManifest().action.default_title });
+  }
+}
+
+function refreshToolbarBadgeLogged() {
+  refreshToolbarBadge().catch((error) => {
+    console.warn('Snap Linkit: could not update the toolbar badge:', error?.message);
+  });
 }
 
 async function offerWhatsNew(previousVersion) {
   // Replaces any note still waiting for "Got it", keeping its shortcut lines
   const { whatsNew } = await browserAPI.storage.local.get('whatsNew');
   await browserAPI.storage.local.set({ whatsNew: whatsNewRecord(previousVersion, whatsNew) });
-  await showWhatsNewBadge();
-}
-
-async function restoreWhatsNewBadge() {
-  const { whatsNew } = await browserAPI.storage.local.get('whatsNew');
-  if (whatsNew && whatsNew.badge === true) await showWhatsNewBadge();
+  await refreshToolbarBadge();
 }
 
 // 1.2.1's content script matched <all_urls>, so Firefox granted <all_urls> at
@@ -82,11 +111,15 @@ browserAPI.runtime.onInstalled.addListener((details) => {
   });
 });
 
-browserAPI.runtime.onStartup.addListener(() => {
-  restoreWhatsNewBadge().catch((error) => {
-    console.warn("Snap Linkit: could not restore the what's new badge:", error?.message);
-  });
-});
+browserAPI.runtime.onStartup.addListener(refreshToolbarBadgeLogged);
+
+// Site access granted or removed (about:addons, the popup's "Grant access", Chrome's site access menu)
+for (const event of [browserAPI.permissions?.onAdded, browserAPI.permissions?.onRemoved]) {
+  if (event && typeof event.addListener === 'function') event.addListener(refreshToolbarBadgeLogged);
+}
+
+// And once now, as the background starts
+refreshToolbarBadgeLogged();
 
 // ============================================
 // MESSAGE HANDLER

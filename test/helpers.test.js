@@ -11,7 +11,7 @@ test('SnapLinkitLib exposes every helper and is frozen', () => {
     'carefulProgressMessage', 'carefulFallbackMessage', 'carefulNotStartedMessage', 'clampMenuAxis', 'faultMatches', 'dragModifierMode', 'filenameFromUrl', 'fitMenuAxis', 'formatDurationEstimate', 'formatShortcut',
     'isDownloadableUrl', 'isOpenableUrl', 'isStyleHidden', 'isTrackedCheckbox', 'isValidPattern', 'isVersionBefore', 'majorityShouldCheck',
     'matchesPattern', 'normalizeReleaseAction', 'ordinaryCheckboxMessage', 'ordinaryUnreadMessage', 'plural',
-    'proxyLabelIndexes', 'rectsIntersect', 'selectionRect', 'rectFromPoints', 'dragStartPoint', 'uniqueMatch', 'firstUsableAnchor', 'dragPageChangedMessage', 'dragStartFailedMessage', 'DRAG_OFF_REASONS', 'DRAG_ENDS', 'dragDiagName', 'dragDiagPx', 'dragDiagLine', 'DRAG_EXTRAS', 'anchorLostOutcome', 'releaseAfterCarryOn', 'saveGapMs', 'SAVE_GAP_MAX_MS', 'SAVE_GAP_DEFAULT_MS', 'siteRunState', 'dragFollowNeeded', 'trackingLock', 'fixedContainerAllows', 'autoScrollStep', 'autoScrollZone', 'AUTO_SCROLL_CREEP', 'AUTO_SCROLL_CAP', 'autoScrollRate', 'autoScrollDelta', 'clampToArea', 'liveCountText', 'selectableVerdict', 'labelMapFrom', 'touchesSelection', 'onlyOwnClassChange', 'pageChangeMarksStale', 'shouldOfferWhatsNew', 'whatsNewLines', 'whatsNewRecord', 'whatsNewShowsShortcuts',
+    'proxyLabelIndexes', 'rectsIntersect', 'selectionRect', 'rectFromPoints', 'dragStartPoint', 'uniqueMatch', 'firstUsableAnchor', 'dragPageChangedMessage', 'dragStartFailedMessage', 'DRAG_OFF_REASONS', 'DRAG_ENDS', 'dragDiagName', 'dragDiagPx', 'dragDiagLine', 'DRAG_EXTRAS', 'anchorLostOutcome', 'releaseAfterCarryOn', 'saveGapMs', 'SAVE_GAP_MAX_MS', 'SAVE_GAP_DEFAULT_MS', 'siteRunState', 'toolbarBadge', 'dragFollowNeeded', 'trackingLock', 'fixedContainerAllows', 'autoScrollStep', 'autoScrollZone', 'AUTO_SCROLL_CREEP', 'AUTO_SCROLL_CAP', 'autoScrollRate', 'autoScrollDelta', 'clampToArea', 'liveCountText', 'selectableVerdict', 'labelMapFrom', 'touchesSelection', 'onlyOwnClassChange', 'pageChangeMarksStale', 'shouldOfferWhatsNew', 'whatsNewLines', 'whatsNewRecord', 'whatsNewShowsShortcuts',
   ].sort());
   assert.ok(Object.isFrozen(lib));
   assert.equal(globalThis.SnapLinkitLib, lib);
@@ -409,6 +409,21 @@ test('dragDiagLine: the agreed regex parses a full line, every later field in DR
     'selected', 'boxes', 'links', 'first', 'last', 'updates', 'slowest', 'scrollPause', 'rebuilds',
     ...lib.DRAG_EXTRAS.map(([k]) => k)]);
   assert.deepEqual([f.follows, f.lock, f.fixedOut, f.topSpeed, f.carried], ['3', 'none', '1', '1250', 'last-seen']);
+});
+
+test('toolbarBadge (item 2): "!" without site access wins over "NEW"; otherwise no badge, the manifest title', () => {
+  const ACCESS = { text: '!', color: '#ff4444', textColor: '#ffffff', title: 'Snap Linkit needs site access. Click to fix' };
+  const NEW = { text: 'NEW', color: '#bf00ff', textColor: '#ffffff', title: "Snap Linkit: see what's new" };
+  const NONE = { text: '', color: null, textColor: null, title: null };
+  assert.deepEqual({ ...lib.toolbarBadge({ hostAccess: false, whatsNewBadge: false }) }, ACCESS);
+  assert.deepEqual({ ...lib.toolbarBadge({ hostAccess: false, whatsNewBadge: true }) }, ACCESS); // "!" wins
+  assert.deepEqual({ ...lib.toolbarBadge({ hostAccess: true, whatsNewBadge: true }) }, NEW);
+  assert.deepEqual({ ...lib.toolbarBadge({ hostAccess: null, whatsNewBadge: true }) }, NEW);  // unknown access: never "!"
+  assert.deepEqual({ ...lib.toolbarBadge({ hostAccess: true, whatsNewBadge: false }) }, NONE);
+  assert.deepEqual({ ...lib.toolbarBadge({ hostAccess: undefined }) }, NONE);
+  assert.deepEqual({ ...lib.toolbarBadge(null) }, NONE);
+  assert.deepEqual({ ...lib.toolbarBadge({ hostAccess: true, whatsNewBadge: 'yes' }) }, NONE); // only a real true
+  assert.ok(Object.isFrozen(lib.toolbarBadge({ hostAccess: false })));
 });
 
 test('siteRunState (item 3): the one on/off rule content.js and the popup share, with the reason', () => {
