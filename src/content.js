@@ -1264,7 +1264,11 @@
     }
   }
 
-  function showToast(message, { sticky = false } = {}) {
+  // progress: a "Saving i of k" update (test builds log every other message)
+  function showToast(message, { sticky = false, progress = false } = {}) {
+    // Item 10a (big run 2): the final message also goes to the console in test
+    // builds, so it can be kept as evidence after it closes (2.5 s on success)
+    if (SAVE_LOG && !progress) console.log(`[Snap Linkit] message: ${message}`); // @test-only
     const existing = document.querySelector('.snaplinkit-toast');
     if (sticky && existing && existing.isConnected && existing.getAttribute(STICKY_ATTR) === '1') {
       existing.textContent = message;
@@ -1500,7 +1504,7 @@
 
   function showCarefulProgress(run) {
     faultPoint('progress', run.i); // @test-only: lab builds: a fault inside the run, before item i is clicked
-    showToast(carefulProgressMessage(run.i, run.k, run.ignoredDrag), { sticky: true });
+    showToast(carefulProgressMessage(run.i, run.k, run.ignoredDrag), { sticky: true, progress: true });
   }
 
   // Is any Fandom tracking box on the page still saving (an earlier save,
