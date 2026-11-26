@@ -7,7 +7,7 @@ const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
 
 // Pure helpers live in lib/helpers.js (loaded first by the manifest)
 const {
-  isOpenableUrl, filenameFromUrl, shouldOfferWhatsNew, whatsNewRecord, isVersionBefore, toolbarBadge
+  isOpenableUrl, filenameFromUrl, shouldOfferWhatsNew, whatsNewRecord, isVersionBefore, hasSiteAccess, toolbarBadge
 } = globalThis.SnapLinkitLib;
 
 // ============================================
@@ -32,20 +32,20 @@ browserAPI.commands.onCommand.addListener(async (command) => {
 // ============================================
 // storage.local "whatsNew" = { version, badge, shortcuts, lines140 }. Set here on
 // an update from before 1.5.0; popup.js sets badge to false when the popup first
-// opens and removes the key on "Got it". Without site access Snap Linkit can't
-// run on any page, so the badge says "!" instead (it wins over "NEW"; the popup
-// explains and offers "Grant access"). The badge does not survive a browser
-// restart, so onStartup sets it again; it is also checked when the background
-// starts and whenever site access is granted or removed. Every listener is
-// registered at the top level so the background page wakes.
-const HOST_ORIGINS = ['http://*/*', 'https://*/*']; // = host_permissions in manifest.json (and popup.js)
+// opens and removes the key on "Got it". With no site access at all Snap Linkit
+// can't run on any page, so the badge says "!" instead (it wins over "NEW"; the
+// popup explains and offers "Grant access"). Access to some sites only is not
+// "no access" (hasSiteAccess, shared with popup.js). The badge does not survive
+// a browser restart, so onStartup sets it again; it is also checked when the
+// background starts and whenever site access is granted or removed. Every
+// listener is registered at the top level so the background page wakes.
 
-// true / false, or null when it can't be told (then "!" is never shown)
+// Any site access (true / false), or null when it can't be told (then "!" is never shown)
 async function hostAccessGranted() {
   const api = browserAPI.permissions;
-  if (!api || typeof api.contains !== 'function') return null;
+  if (!api || typeof api.getAll !== 'function') return null;
   try {
-    return (await api.contains({ origins: HOST_ORIGINS })) === true;
+    return hasSiteAccess((await api.getAll()).origins);
   } catch (error) {
     console.warn('Snap Linkit: could not check site access:', error?.message);
     return null;

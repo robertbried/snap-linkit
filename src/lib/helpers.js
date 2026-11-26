@@ -308,10 +308,22 @@
   }
   // @test-only-end
 
-  // The toolbar badge (item 2). "!" when site access is missing wins over the
-  // what's-new "NEW"; with neither, no badge and the manifest's own title.
-  //   { hostAccess, whatsNewBadge }  hostAccess: true, false (missing) or null
-  //                                  (unknown: never shows "!")
+  // Does Snap Linkit have any site access at all? The one rule background.js
+  // and popup.js share for the toolbar "!" (ultrareview 2, #1). Given the
+  // origins it holds (permissions.getAll().origins): true when any of them
+  // reaches web pages, false when none does, null when it can't be told.
+  // Access to some sites only (Chrome's "On specific sites", Firefox's "Always
+  // allow on this site") counts as access: Snap Linkit runs there, so no "!".
+  function hasSiteAccess(origins) {
+    if (!Array.isArray(origins)) return null;
+    return origins.some((o) => typeof o === 'string' && (o === '<all_urls>' || /^(\*|https?):\/\//i.test(o)));
+  }
+
+  // The toolbar badge (item 2). "!" when Snap Linkit has no site access at all
+  // (hasSiteAccess) wins over the what's-new "NEW"; with neither, no badge and
+  // the manifest's own title.
+  //   { hostAccess, whatsNewBadge }  hostAccess: true, false (none at all) or
+  //                                  null (unknown: never shows "!")
   //   -> { text, color, textColor, title }  text '' and title null: no badge,
   //                                          the manifest's default title
   const ACCESS_BADGE = Object.freeze({ text: '!', color: '#ff4444', textColor: '#ffffff', title: 'Snap Linkit needs site access. Click to fix' });
@@ -953,6 +965,7 @@
     anchorLostOutcome,
     saveGapMs,
     siteRunState,
+    hasSiteAccess,
     toolbarBadge,
     SAVE_GAP_MAX_MS,
     SAVE_GAP_DEFAULT_MS,

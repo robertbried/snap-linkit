@@ -7,7 +7,7 @@
   'use strict';
 
   // Pure helpers live in lib/helpers.js (loaded first by popup.html)
-  const { isValidPattern, blacklistBytes, whatsNewLines, whatsNewShowsShortcuts, whatsNewShows140, normalizeReleaseAction, siteRunState, toolbarBadge } = globalThis.SnapLinkitLib;
+  const { isValidPattern, blacklistBytes, whatsNewLines, whatsNewShowsShortcuts, whatsNewShows140, normalizeReleaseAction, siteRunState, hasSiteAccess, toolbarBadge } = globalThis.SnapLinkitLib;
 
   const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
 
@@ -419,11 +419,12 @@
   // (update from before 1.3.0) are rebuilt from the current shortcuts, so one
   // customised since is left out.
   async function clearWhatsNewBadge() {
-    // Without site access the badge stays "!" (item 2: it wins over "NEW")
-    const api = permissionsApi();
+    // With no site access at all the badge stays "!" (item 2: it wins over
+    // "NEW"); the same rule as background.js (hasSiteAccess)
+    const api = browserAPI.permissions;
     let access = null;
     try {
-      access = api ? (await api.contains({ origins: HOST_ORIGINS })) === true : null;
+      access = api && typeof api.getAll === 'function' ? hasSiteAccess((await api.getAll()).origins) : null;
     } catch (error) {
       access = null;
     }

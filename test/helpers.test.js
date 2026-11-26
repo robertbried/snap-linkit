@@ -11,7 +11,7 @@ test('SnapLinkitLib exposes every helper and is frozen', () => {
     'carefulProgressMessage', 'carefulFallbackMessage', 'rowLabel', 'carefulNotStartedMessage', 'clampMenuAxis', 'faultMatches', 'dragModifierMode', 'filenameFromUrl', 'fitMenuAxis', 'formatDurationEstimate', 'formatShortcut',
     'isDownloadableUrl', 'isOpenableUrl', 'isStyleHidden', 'isTrackedCheckbox', 'isValidPattern', 'isVersionBefore', 'majorityShouldCheck',
     'matchesPattern', 'normalizeReleaseAction', 'ordinaryCheckboxMessage', 'ordinaryUnreadMessage', 'plural',
-    'proxyLabelIndexes', 'rectsIntersect', 'selectionRect', 'rectFromPoints', 'dragStartPoint', 'uniqueMatch', 'firstUsableAnchor', 'dragPageChangedMessage', 'dragStartFailedMessage', 'DRAG_OFF_REASONS', 'DRAG_ENDS', 'dragDiagName', 'dragDiagPx', 'dragDiagLine', 'DRAG_EXTRAS', 'saveLogLine', 'anchorLostOutcome', 'releaseAfterCarryOn', 'saveGapMs', 'SAVE_GAP_MAX_MS', 'SAVE_GAP_DEFAULT_MS', 'siteRunState', 'toolbarBadge', 'dragFollowNeeded', 'trackingLock', 'fixedContainerAllows', 'autoScrollStep', 'autoScrollZone', 'AUTO_SCROLL_CREEP', 'AUTO_SCROLL_CAP', 'autoScrollRate', 'autoScrollDelta', 'clampToArea', 'liveCountText', 'selectableVerdict', 'labelMapFrom', 'touchesSelection', 'onlyOwnClassChange', 'pageChangeMarksStale', 'shouldOfferWhatsNew', 'whatsNewLines', 'whatsNewRecord', 'whatsNewShowsShortcuts', 'whatsNewShows140',
+    'proxyLabelIndexes', 'rectsIntersect', 'selectionRect', 'rectFromPoints', 'dragStartPoint', 'uniqueMatch', 'firstUsableAnchor', 'dragPageChangedMessage', 'dragStartFailedMessage', 'DRAG_OFF_REASONS', 'DRAG_ENDS', 'dragDiagName', 'dragDiagPx', 'dragDiagLine', 'DRAG_EXTRAS', 'saveLogLine', 'anchorLostOutcome', 'releaseAfterCarryOn', 'saveGapMs', 'SAVE_GAP_MAX_MS', 'SAVE_GAP_DEFAULT_MS', 'siteRunState', 'hasSiteAccess', 'toolbarBadge', 'dragFollowNeeded', 'trackingLock', 'fixedContainerAllows', 'autoScrollStep', 'autoScrollZone', 'AUTO_SCROLL_CREEP', 'AUTO_SCROLL_CAP', 'autoScrollRate', 'autoScrollDelta', 'clampToArea', 'liveCountText', 'selectableVerdict', 'labelMapFrom', 'touchesSelection', 'onlyOwnClassChange', 'pageChangeMarksStale', 'shouldOfferWhatsNew', 'whatsNewLines', 'whatsNewRecord', 'whatsNewShowsShortcuts', 'whatsNewShows140',
   ].sort());
   assert.ok(Object.isFrozen(lib));
   assert.equal(globalThis.SnapLinkitLib, lib);
@@ -417,6 +417,22 @@ test('dragDiagLine: the agreed regex parses a full line, every later field in DR
     'selected', 'boxes', 'links', 'first', 'last', 'updates', 'slowest', 'scrollPause', 'rebuilds',
     ...lib.DRAG_EXTRAS.map(([k]) => k)]);
   assert.deepEqual([f.follows, f.lock, f.fixedOut, f.topSpeed, f.carried], ['3', 'none', '1', '1250', 'last-seen']);
+});
+
+test('hasSiteAccess (ultrareview 2, #1): any web origin counts; none is false; unknown is null', () => {
+  assert.equal(lib.hasSiteAccess([]), false);                                      // access turned off
+  assert.equal(lib.hasSiteAccess(['http://*/*', 'https://*/*']), true);            // all sites
+  assert.equal(lib.hasSiteAccess(['http://example.com/*', 'https://example.com/*']), true); // Firefox "Always allow on this site"
+  assert.equal(lib.hasSiteAccess(['https://fandom.com/*']), true);                 // Chrome "On specific sites"
+  assert.equal(lib.hasSiteAccess(['*://example.com/*']), true);
+  assert.equal(lib.hasSiteAccess(['<all_urls>']), true);
+  assert.equal(lib.hasSiteAccess(['HTTPS://example.com/*']), true);
+  assert.equal(lib.hasSiteAccess(['moz-extension://abc/*', 'file:///*', 'chrome://favicon/*']), false); // no web page
+  assert.equal(lib.hasSiteAccess([null, 42, {}]), false);
+  assert.equal(lib.hasSiteAccess([null, 'https://example.com/*']), true);
+  assert.equal(lib.hasSiteAccess(undefined), null);
+  assert.equal(lib.hasSiteAccess(null), null);
+  assert.equal(lib.hasSiteAccess('https://*/*'), null);
 });
 
 test('toolbarBadge (item 2): "!" without site access wins over "NEW"; otherwise no badge, the manifest title', () => {
