@@ -1879,8 +1879,10 @@
       const inLasso = dragCache && dragCache.inLasso ? dragCache.inLasso : new Set();
       for (const el of Array.from(state.selectedElements)) {
         // C applies to what this drag's box holds; an earlier Ctrl drag's
-        // elements keep their own press's verdict
-        if (isSelectableElement(el) && (!inLasso.has(el) || fixedRuleAllows(el))) continue;
+        // elements keep their own press's verdict. An element the page has
+        // removed since (an earlier Ctrl/Alt drag's link) is not there to act
+        // on: it leaves the selection (item 22)
+        if (el.isConnected && isSelectableElement(el) && (!inLasso.has(el) || fixedRuleAllows(el))) continue;
         state.selectedElements.delete(el);
         el.classList.remove('snaplinkit-highlighted');
         labelsOf(el).forEach((l) => l.classList.remove('snaplinkit-highlighted'));
