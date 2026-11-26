@@ -7,7 +7,7 @@
   'use strict';
 
   // Pure helpers live in lib/helpers.js (loaded first by popup.html)
-  const { isValidPattern, blacklistBytes, whatsNewLines, whatsNewShowsShortcuts, normalizeReleaseAction, siteRunState, toolbarBadge } = globalThis.SnapLinkitLib;
+  const { isValidPattern, blacklistBytes, whatsNewLines, whatsNewShowsShortcuts, whatsNewShows140, normalizeReleaseAction, siteRunState, toolbarBadge } = globalThis.SnapLinkitLib;
 
   const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
 
@@ -104,6 +104,7 @@
     // What's new note (Info tab)
     elements.whatsNew = document.getElementById('whatsNew');
     elements.whatsNewLines = document.getElementById('whatsNewLines');
+    elements.whatsNew140 = document.getElementById('whatsNew140');
     elements.whatsNewDismiss = document.getElementById('whatsNewDismiss');
   }
 
@@ -409,12 +410,14 @@
     if (elements.blacklistInput && typeof elements.blacklistInput.focus === 'function') elements.blacklistInput.focus();
   }
 
-  // ---- What's new note (1.4.0, plus the 1.3.0 shortcut lines) ----
-  // background.js stores whatsNew = { version, badge, shortcuts } in
-  // storage.local on an update from before 1.4.0. Opening the popup clears the
-  // toolbar badge and tooltip; the note stays until "Got it". The 1.4.0 lines
-  // are in popup.html. The shortcut lines (update from before 1.3.0) are
-  // rebuilt from the current shortcuts, so one customised since is left out.
+  // ---- What's new note (1.5.0, plus the 1.4.0 lines and the 1.3.0 shortcut lines) ----
+  // background.js stores whatsNew = { version, badge, shortcuts, lines140 } in
+  // storage.local on an update from before 1.5.0. Opening the popup clears the
+  // toolbar badge and tooltip; the note stays until "Got it". The 1.5.0 and
+  // 1.4.0 lines are in popup.html; the 1.4.0 block is shown only for an update
+  // from before 1.4.0 (or an older note never dismissed). The shortcut lines
+  // (update from before 1.3.0) are rebuilt from the current shortcuts, so one
+  // customised since is left out.
   async function clearWhatsNewBadge() {
     // Without site access the badge stays "!" (item 2: it wins over "NEW")
     const api = permissionsApi();
@@ -444,6 +447,7 @@
       const { whatsNew } = await browserAPI.storage.local.get('whatsNew');
       if (!whatsNew) return;
       elements.whatsNewLines.replaceChildren();
+      if (elements.whatsNew140) elements.whatsNew140.hidden = !whatsNewShows140(whatsNew);
       if (whatsNewShowsShortcuts(whatsNew)) {
         const [commands, platform] = await Promise.all([
           browserAPI.commands.getAll(),

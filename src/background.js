@@ -28,10 +28,10 @@ browserAPI.commands.onCommand.addListener(async (command) => {
 });
 
 // ============================================
-// TOOLBAR BADGE: "!" WITHOUT SITE ACCESS (item 2), ELSE "NEW" (1.4.0's what's new)
+// TOOLBAR BADGE: "!" WITHOUT SITE ACCESS (item 2), ELSE "NEW" (the what's-new note)
 // ============================================
-// storage.local "whatsNew" = { version, badge, shortcuts }. Set here on an
-// update from before 1.4.0; popup.js sets badge to false when the popup first
+// storage.local "whatsNew" = { version, badge, shortcuts, lines140 }. Set here on
+// an update from before 1.5.0; popup.js sets badge to false when the popup first
 // opens and removes the key on "Got it". Without site access Snap Linkit can't
 // run on any page, so the badge says "!" instead (it wins over "NEW"; the popup
 // explains and offers "Grant access"). The badge does not survive a browser

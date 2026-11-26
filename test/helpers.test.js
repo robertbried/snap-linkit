@@ -11,7 +11,7 @@ test('SnapLinkitLib exposes every helper and is frozen', () => {
     'carefulProgressMessage', 'carefulFallbackMessage', 'rowLabel', 'carefulNotStartedMessage', 'clampMenuAxis', 'faultMatches', 'dragModifierMode', 'filenameFromUrl', 'fitMenuAxis', 'formatDurationEstimate', 'formatShortcut',
     'isDownloadableUrl', 'isOpenableUrl', 'isStyleHidden', 'isTrackedCheckbox', 'isValidPattern', 'isVersionBefore', 'majorityShouldCheck',
     'matchesPattern', 'normalizeReleaseAction', 'ordinaryCheckboxMessage', 'ordinaryUnreadMessage', 'plural',
-    'proxyLabelIndexes', 'rectsIntersect', 'selectionRect', 'rectFromPoints', 'dragStartPoint', 'uniqueMatch', 'firstUsableAnchor', 'dragPageChangedMessage', 'dragStartFailedMessage', 'DRAG_OFF_REASONS', 'DRAG_ENDS', 'dragDiagName', 'dragDiagPx', 'dragDiagLine', 'DRAG_EXTRAS', 'saveLogLine', 'anchorLostOutcome', 'releaseAfterCarryOn', 'saveGapMs', 'SAVE_GAP_MAX_MS', 'SAVE_GAP_DEFAULT_MS', 'siteRunState', 'toolbarBadge', 'dragFollowNeeded', 'trackingLock', 'fixedContainerAllows', 'autoScrollStep', 'autoScrollZone', 'AUTO_SCROLL_CREEP', 'AUTO_SCROLL_CAP', 'autoScrollRate', 'autoScrollDelta', 'clampToArea', 'liveCountText', 'selectableVerdict', 'labelMapFrom', 'touchesSelection', 'onlyOwnClassChange', 'pageChangeMarksStale', 'shouldOfferWhatsNew', 'whatsNewLines', 'whatsNewRecord', 'whatsNewShowsShortcuts',
+    'proxyLabelIndexes', 'rectsIntersect', 'selectionRect', 'rectFromPoints', 'dragStartPoint', 'uniqueMatch', 'firstUsableAnchor', 'dragPageChangedMessage', 'dragStartFailedMessage', 'DRAG_OFF_REASONS', 'DRAG_ENDS', 'dragDiagName', 'dragDiagPx', 'dragDiagLine', 'DRAG_EXTRAS', 'saveLogLine', 'anchorLostOutcome', 'releaseAfterCarryOn', 'saveGapMs', 'SAVE_GAP_MAX_MS', 'SAVE_GAP_DEFAULT_MS', 'siteRunState', 'toolbarBadge', 'dragFollowNeeded', 'trackingLock', 'fixedContainerAllows', 'autoScrollStep', 'autoScrollZone', 'AUTO_SCROLL_CREEP', 'AUTO_SCROLL_CAP', 'autoScrollRate', 'autoScrollDelta', 'clampToArea', 'liveCountText', 'selectableVerdict', 'labelMapFrom', 'touchesSelection', 'onlyOwnClassChange', 'pageChangeMarksStale', 'shouldOfferWhatsNew', 'whatsNewLines', 'whatsNewRecord', 'whatsNewShowsShortcuts', 'whatsNewShows140',
   ].sort());
   assert.ok(Object.isFrozen(lib));
   assert.equal(globalThis.SnapLinkitLib, lib);
@@ -658,14 +658,15 @@ test('isVersionBefore: dotted numeric compare', () => {
   assert.equal(lib.isVersionBefore('2.0', '1.3.0'), false);
 });
 
-test('shouldOfferWhatsNew: only an update from a version before 1.4.0', () => {
-  assert.equal(lib.WHATS_NEW_VERSION, '1.4.0');
+test('shouldOfferWhatsNew: only an update from a version before 1.5.0', () => {
+  assert.equal(lib.WHATS_NEW_VERSION, '1.5.0');
   assert.equal(lib.shouldOfferWhatsNew({ reason: 'update', previousVersion: '1.2.1', temporary: false }), true);
   assert.equal(lib.shouldOfferWhatsNew({ reason: 'update', previousVersion: '1.2.1', temporary: true }), true, 'temporary loads are not skipped');
-  assert.equal(lib.shouldOfferWhatsNew({ reason: 'update', previousVersion: '1.3.0' }), true, 'every 1.3.x user gets the 1.4.0 note');
-  assert.equal(lib.shouldOfferWhatsNew({ reason: 'update', previousVersion: '1.3.9' }), true);
-  assert.equal(lib.shouldOfferWhatsNew({ reason: 'update', previousVersion: '1.4.0', temporary: true }), false, 'reload of the same version');
-  assert.equal(lib.shouldOfferWhatsNew({ reason: 'update', previousVersion: '1.4.1' }), false);
+  assert.equal(lib.shouldOfferWhatsNew({ reason: 'update', previousVersion: '1.3.0' }), true);
+  assert.equal(lib.shouldOfferWhatsNew({ reason: 'update', previousVersion: '1.4.0' }), true, 'every 1.4.x user gets the 1.5.0 note');
+  assert.equal(lib.shouldOfferWhatsNew({ reason: 'update', previousVersion: '1.4.9' }), true);
+  assert.equal(lib.shouldOfferWhatsNew({ reason: 'update', previousVersion: '1.5.0', temporary: true }), false, 'reload of the same version');
+  assert.equal(lib.shouldOfferWhatsNew({ reason: 'update', previousVersion: '1.5.1' }), false);
   assert.equal(lib.shouldOfferWhatsNew({ reason: 'install', temporary: false }), false);
   assert.equal(lib.shouldOfferWhatsNew({ reason: 'browser_update' }), false);
   assert.equal(lib.shouldOfferWhatsNew({ reason: 'update' }), false, 'no previousVersion');
@@ -680,14 +681,30 @@ test('formatShortcut: spaced, Option/Command/Control on macOS, Comma kept as a w
   assert.equal(lib.formatShortcut('Ctrl+Shift+K', false), 'Ctrl + Shift + K');
 });
 
-test('whatsNewRecord: 1.4.0 note with the badge; shortcut lines only from before 1.3.0 or a pending 1.3.0 note', () => {
-  assert.deepEqual(lib.whatsNewRecord('1.3.0', undefined), { version: '1.4.0', badge: true, shortcuts: false });
-  assert.deepEqual(lib.whatsNewRecord('1.3.5', null), { version: '1.4.0', badge: true, shortcuts: false });
-  assert.deepEqual(lib.whatsNewRecord('1.2.1', undefined), { version: '1.4.0', badge: true, shortcuts: true });
-  assert.deepEqual(lib.whatsNewRecord('1.0', undefined), { version: '1.4.0', badge: true, shortcuts: true });
-  assert.deepEqual(lib.whatsNewRecord('1.3.0', { version: '1.3.0', badge: false }), { version: '1.4.0', badge: true, shortcuts: true },
+test('whatsNewRecord: 1.5.0 note with the badge; the 1.4.0 lines from before 1.4.0 or an older note pending; shortcut lines from before 1.3.0 or a pending 1.3.0 note', () => {
+  const rec = (shortcuts, lines140) => ({ version: '1.5.0', badge: true, shortcuts, lines140 });
+  assert.deepEqual(lib.whatsNewRecord('1.4.0', undefined), rec(false, false), 'a 1.4.0 user: the 1.5.0 lines only');
+  assert.deepEqual(lib.whatsNewRecord('1.4.9', null), rec(false, false));
+  assert.deepEqual(lib.whatsNewRecord('1.3.0', undefined), rec(false, true), 'a 1.3.x user also gets the 1.4.0 lines');
+  assert.deepEqual(lib.whatsNewRecord('1.3.5', null), rec(false, true));
+  assert.deepEqual(lib.whatsNewRecord('1.2.1', undefined), rec(true, true));
+  assert.deepEqual(lib.whatsNewRecord('1.0', undefined), rec(true, true));
+  assert.deepEqual(lib.whatsNewRecord('1.4.0', { version: '1.4.0', badge: false, shortcuts: false }), rec(false, true),
+    'a 1.4.0 note never dismissed keeps the 1.4.0 lines');
+  assert.deepEqual(lib.whatsNewRecord('1.4.0', { version: '1.4.0', badge: false, shortcuts: true }), rec(true, true),
+    '...and its shortcut lines');
+  assert.deepEqual(lib.whatsNewRecord('1.3.0', { version: '1.3.0', badge: false }), rec(true, true),
     'a 1.3.0 note never dismissed keeps its shortcut lines');
-  assert.deepEqual(lib.whatsNewRecord('1.3.0', { version: '1.4.0', badge: false, shortcuts: false }), { version: '1.4.0', badge: true, shortcuts: false });
+  assert.deepEqual(lib.whatsNewRecord('1.4.0', { version: '1.5.0', badge: false, shortcuts: false, lines140: false }), rec(false, false),
+    'a pending 1.5.0 note (a reload) adds nothing');
+});
+
+test('whatsNewShows140: lines140 flag, or a record written before 1.5.0', () => {
+  assert.equal(lib.whatsNewShows140({ version: '1.5.0', badge: true, shortcuts: false, lines140: true }), true);
+  assert.equal(lib.whatsNewShows140({ version: '1.5.0', badge: true, shortcuts: true, lines140: false }), false);
+  assert.equal(lib.whatsNewShows140({ version: '1.4.0', badge: false, shortcuts: false }), true);
+  assert.equal(lib.whatsNewShows140({ version: '1.3.0', badge: false }), true);
+  for (const v of [undefined, null, {}, { lines140: 'yes' }, { version: 150 }]) assert.equal(lib.whatsNewShows140(v), false);
 });
 
 test('whatsNewShowsShortcuts: shortcuts flag, or a record written by 1.3.0', () => {

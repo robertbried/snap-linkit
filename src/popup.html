@@ -127,6 +127,15 @@
       gap: 8px;
     }
 
+    /* The 1.4.0 lines under the 1.5.0 note, for people updating from before 1.4.0 */
+    .whats-new-older {
+      margin-top: 6px;
+    }
+
+    .whats-new-older[hidden] {
+      display: none;
+    }
+
     .tab-label {
       flex: 1;
       padding: 8px;
@@ -653,17 +662,23 @@
 
   <!-- Info Tab Content -->
   <div class="tab-content" id="content-info">
-    <!-- What's new (1.4.0): shown by popup.js until "Got it". For updates from before 1.3.0,
-         popup.js adds the 1.3.0 shortcut lines (from commands.getAll) in whatsNewLines. -->
+    <!-- What's new (1.5.0): shown by popup.js until "Got it". popup.js shows the 1.4.0 lines (whatsNew140) for updates
+         from before 1.4.0, or when an older note was never dismissed; for updates from before 1.3.0 it also adds the
+         1.3.0 shortcut lines (from commands.getAll) in whatsNewLines. -->
     <div class="whats-new" id="whatsNew" hidden>
       <div class="whats-new-head">
-        <strong>New in 1.4.0</strong>
+        <strong>New in 1.5.0</strong>
         <button class="add-btn" id="whatsNewDismiss">Got it</button>
       </div>
-      <div>Letting go now opens the links right away.</div>
-      <div>To choose what happens instead: Settings &gt; Tab Opening &gt; When I let go. Pick "Show the menu" for the old way.</div>
-      <div>Hold Ctrl as you let go to see the menu.</div>
-      <div>Hold Ctrl as you start a drag to add more links.</div>
+      <div>Works with Fandom's progress tracking checkboxes: drag over a table to tick or untick them all, and Snap Linkit saves them one at a time.</div>
+      <div>The popup now says when Snap Linkit is switched off or off on this site, and the toolbar icon shows "!" when it needs website access.</div>
+      <div class="whats-new-older" id="whatsNew140" hidden>
+        <strong>New in 1.4.0</strong>
+        <div>Letting go now opens the links right away.</div>
+        <div>To choose what happens instead: Settings &gt; Tab Opening &gt; When I let go. Pick "Show the menu" for the old way.</div>
+        <div>Hold Ctrl as you let go to see the menu.</div>
+        <div>Hold Ctrl as you start a drag to add more links.</div>
+      </div>
       <div id="whatsNewLines"></div>
     </div>
 
@@ -786,15 +801,15 @@
       </div>
     </div>
 
-    <!-- Fandom tracking boxes: the extra wait after each save (settings.checkboxSaveGap, 0-2000 ms; item 6) -->
+    <!-- Fandom progress tracking: the extra wait after each save (settings.checkboxSaveGap, 0-2000 ms; item 6) -->
     <div class="setting-group">
-      <div class="section-title">Fandom Tracking Boxes</div>
+      <div class="section-title">Fandom Progress Tracking</div>
       <div class="setting-row">
         <div class="setting-label">
-          <span title="Snap Linkit saves Fandom's tracking boxes one at a time. This is the extra wait after each save. Raise it if Fandom shows save errors.">Delay Between Saves</span>
+          <span title="Snap Linkit saves Fandom's progress tracking checkboxes one at a time. This is the extra wait after each save. Raise it if Fandom shows save errors.">Delay Between Saves</span>
           <span><span class="setting-value" id="checkboxSaveGapValue">150</span><span class="setting-unit">ms</span></span>
         </div>
-        <input type="range" class="setting-slider" id="checkboxSaveGap" min="0" max="2000" step="50" value="150" title="Snap Linkit saves Fandom's tracking boxes one at a time. This is the extra wait after each save. Raise it if Fandom shows save errors.">
+        <input type="range" class="setting-slider" id="checkboxSaveGap" min="0" max="2000" step="50" value="150" title="Snap Linkit saves Fandom's progress tracking checkboxes one at a time. This is the extra wait after each save. Raise it if Fandom shows save errors.">
       </div>
     </div>
 

@@ -843,13 +843,16 @@
     return cleaned || 'download';
   }
 
-  // ---- "What's new" notice (1.4.0: letting go acts at once) ----
+  // ---- "What's new" notice (1.5.0: Fandom progress tracking, popup states, "!") ----
   // WHATS_NEW_VERSION: an update from any version before it gets the note.
+  // People updating from before 1.4.0 also get the 1.4.0 lines (letting go
+  // acts at once; Rob, 2026-11-26: they stay next to the 1.5.0 note).
   // People updating from before 1.3.0 also get the 1.3.0 shortcut lines: the
   // version that changed the defaults, and the new defaults. A command
   // whose current shortcut still equals its entry here is one the user saw
   // change; a customised or cleared shortcut did not change for them.
-  const WHATS_NEW_VERSION = '1.4.0';
+  const WHATS_NEW_VERSION = '1.5.0';
+  const WHATS_NEW_140_VERSION = '1.4.0';
   const WHATS_NEW_SHORTCUTS_VERSION = '1.3.0';
   const WHATS_NEW_SHORTCUTS = Object.freeze([
     Object.freeze({ name: 'toggle-extension', label: 'Turn Snap Linkit on or off', shortcut: 'Alt+Shift+L' }),
@@ -870,7 +873,7 @@
   }
 
   // runtime.onInstalled details -> offer the notice? Only an update from a
-  // version before 1.4.0. Installs, browser updates and reloads of the same
+  // version before 1.5.0. Installs, browser updates and reloads of the same
   // version are excluded; temporary loads are deliberately not.
   function shouldOfferWhatsNew(details) {
     return Boolean(details) && details.reason === 'update' &&
@@ -890,12 +893,23 @@
   // storage.local "whatsNew" record for an update from previousVersion.
   // shortcuts: also show the 1.3.0 shortcut lines, for an update from before
   // 1.3.0 or when a 1.3.0 note was still waiting for "Got it" (pending).
+  // lines140: also show the 1.4.0 lines, for an update from before 1.4.0 or
+  // when an older note (1.3.0 or 1.4.0) was still waiting for "Got it".
   function whatsNewRecord(previousVersion, pending) {
     return {
       version: WHATS_NEW_VERSION,
       badge: true,
       shortcuts: isVersionBefore(previousVersion, WHATS_NEW_SHORTCUTS_VERSION) || whatsNewShowsShortcuts(pending),
+      lines140: isVersionBefore(previousVersion, WHATS_NEW_140_VERSION) || whatsNewShows140(pending),
     };
+  }
+
+  // Does a stored record ask for the 1.4.0 lines? Its lines140 flag, or a
+  // record written before 1.5.0 (1.3.0 or 1.4.0: that note was never
+  // dismissed, so its reader hasn't seen the 1.4.0 change yet).
+  function whatsNewShows140(record) {
+    return Boolean(record) && (record.lines140 === true ||
+      (typeof record.version === 'string' && isVersionBefore(record.version, WHATS_NEW_VERSION)));
   }
 
   // Does a stored record ask for the shortcut lines? A 1.3.0 record (written
@@ -989,6 +1003,7 @@
     shouldOfferWhatsNew,
     whatsNewRecord,
     whatsNewShowsShortcuts,
+    whatsNewShows140,
     formatShortcut,
     whatsNewLines,
   });

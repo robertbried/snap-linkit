@@ -189,7 +189,9 @@
       Snap Linkit <span class="highlight">never</span> sends anything to us or to anyone else. It has
       no server and contacts none. The only network traffic it causes is what you ask for: when you
       choose to open or download the links you selected, Firefox loads them just as if you had clicked
-      them yourself. You can verify this using your browser's developer tools (Network tab).
+      them yourself. When you tick Fandom progress tracking checkboxes, the Fandom page itself saves each
+      change to your Fandom account; Snap Linkit only clicks the box. You can verify this using your
+      browser's developer tools (Network tab).
     </p>
 
     <h2>What Snap Linkit Stores</h2>
@@ -206,7 +208,7 @@
       <li><code>blacklistMode</code> - Blacklist or whitelist mode (default: blacklist)</li>
       <li><code>extensionEnabled</code> - Whether extension is on (default: true)</li>
       <li><code>releaseAction</code> - What happens when you let go after a drag over links (default: open in new tabs)</li>
-      <li><code>checkboxSaveGap</code> - Wait after each save of a Fandom tracking box (default: 150ms)</li>
+      <li><code>checkboxSaveGap</code> - Wait after each save of a Fandom progress tracking checkbox (default: 150ms)</li>
       <li><code>whatsNew</code> - One-time "what's new" notice after an update; kept only on this device and removed when you click "Got it"</li>
     </ul>
     <p>That's it: <strong>9 settings and 1 notice flag.</strong> This data:</p>
@@ -250,7 +252,7 @@
         </tr>
         <tr>
           <td><code>http://*/*</code>, <code>https://*/*</code> (access to websites)</td>
-          <td>Lets Snap Linkit draw the selection box and find the links on the web pages you use it on; nothing from those pages is sent anywhere.</td>
+          <td>Lets Snap Linkit draw the selection box and find the links on the web pages you use it on; nothing from those pages is sent anywhere. It also lets the popup read the address of the tab you're on, so it can tell you when a Site Filtering rule turns Snap Linkit off there. Only the site name is used, inside your browser; it isn't stored or sent anywhere.</td>
         </tr>
       </tbody>
     </table>
