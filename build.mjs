@@ -106,6 +106,29 @@ function switchOn(text, off, on, what) {
   return text.replace(off, on);
 }
 
+// Test and lab builds are their own add-on (item 1, big run 2). Firefox gives them their own ID, so a temporary test
+// copy never shares the store copy's settings and site access, and pressing Remove on it can't wipe them. Both
+// browsers show "(test build)" after the name and the toolbar title, so the two copies can be told apart. Store
+// builds keep the store ID and name.
+export const STORE_GECKO_ID = 'snap-linkit@privacy-guaranteed';
+export const TEST_GECKO_ID = 'snap-linkit-test@privacy-guaranteed';
+export const TEST_NAME_SUFFIX = ' (test build)';
+
+function testManifest(text, target) {
+  const m = JSON.parse(text);
+  if (target === 'firefox') {
+    const gecko = m.browser_specific_settings && m.browser_specific_settings.gecko;
+    if (!gecko || gecko.id !== STORE_GECKO_ID) throw new Error(`build: firefox manifest.json has no gecko id "${STORE_GECKO_ID}" to replace`);
+    gecko.id = TEST_GECKO_ID;
+  }
+  if (typeof m.name !== 'string' || !m.action || typeof m.action.default_title !== 'string') {
+    throw new Error(`build: ${target} manifest.json has no name or action.default_title to mark as a test build`);
+  }
+  m.name += TEST_NAME_SUFFIX;
+  m.action.default_title += TEST_NAME_SUFFIX;
+  return JSON.stringify(m, null, 2) + '\n';
+}
+
 // Store builds leave out the test-only code (item 4, big run 2): the per-save and per-drag console lines (SAVE_LOG)
 // and the lab's failure injection (FAULTS). In src/, a line marked "// @test-only" is test-only, and so is every line
 // from "// @test-only-begin" to "// @test-only-end" (both included). Test and lab builds keep every line and only
@@ -155,7 +178,8 @@ export function stripTestOnly(text, what = 'script') {
  * Options:
  *   {}                (default) the store build, no suffix: src/ with the test-only code left out of every script
  *                     (stripTestOnly);
- *   { test: true }    a test build, suffix -test: SAVE_LOG on (one diagnostic console line per save and per drag);
+ *   { test: true }    a test build, suffix -test: SAVE_LOG on (one diagnostic console line per save and per drag),
+ *                     its own Firefox ID and "(test build)" after the name (testManifest);
  *   { test: true, faults: true }
  *                     a lab build, suffix -lab: the test build with failure injection on (FAULTS). `faults`
  *                     without `test` throws.
@@ -187,6 +211,8 @@ export function buildTarget(target, outDir = path.join(ROOT, 'dist'), { test = f
     let text = switchOn(fs.readFileSync(cs, 'utf8'), SAVE_LOG_OFF, SAVE_LOG_ON, 'a test build');
     if (faults) text = switchOn(text, FAULTS_OFF, FAULTS_ON, 'a fault-injection build');
     fs.writeFileSync(cs, text);
+    const mf = path.join(dir, 'manifest.json');
+    fs.writeFileSync(mf, testManifest(fs.readFileSync(mf, 'utf8'), target));
   } else {
     for (const f of files.filter((name) => name.endsWith('.js'))) {
       const file = path.join(dir, f);

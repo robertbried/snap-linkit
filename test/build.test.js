@@ -66,6 +66,33 @@ test('build: store, test and lab builds switch SAVE_LOG and FAULTS as documented
   }
 });
 
+test('build: test and lab builds are their own add-on (own Firefox ID, "(test build)" name); store builds keep the store ID (item 1)', async () => {
+  const { buildTarget, STORE_GECKO_ID, TEST_GECKO_ID } = await import('../build.mjs');
+  assert.equal(STORE_GECKO_ID, 'snap-linkit@privacy-guaranteed');
+  assert.equal(TEST_GECKO_ID, 'snap-linkit-test@privacy-guaranteed');
+  const out = fs.mkdtempSync(path.join(os.tmpdir(), 'snaplinkit-build-test-'));
+  try {
+    for (const target of ['firefox', 'chrome']) {
+      const mf = (r) => JSON.parse(fs.readFileSync(path.join(r.dir, 'manifest.json'), 'utf8'));
+      const source = JSON.parse(fs.readFileSync(sourceOf(target, 'manifest.json'), 'utf8'));
+      const store = mf(buildTarget(target, path.join(out, 'store')));
+      assert.deepEqual(store, source, `${target} store manifest is the source's`);
+      for (const opts of [{ test: true }, { test: true, faults: true }]) {
+        const m = mf(buildTarget(target, path.join(out, opts.faults ? 'lab' : 'test'), opts));
+        const expect = structuredClone(source);
+        expect.name = 'Snap Linkit (test build)';
+        expect.action.default_title = 'Snap Linkit (test build)';
+        if (target === 'firefox') expect.browser_specific_settings.gecko.id = TEST_GECKO_ID;
+        assert.deepEqual(m, expect, `${target} ${opts.faults ? 'lab' : 'test'} manifest: only the ID, name and title differ`);
+      }
+      if (target === 'firefox') assert.equal(store.browser_specific_settings.gecko.id, STORE_GECKO_ID);
+      else assert.ok(!('browser_specific_settings' in store));
+    }
+  } finally {
+    fs.rmSync(out, { recursive: true, force: true });
+  }
+});
+
 test('stripTestOnly: marked lines and blocks are left out; malformed markers and leftovers fail the build', async () => {
   const { stripTestOnly } = await import('../build.mjs');
   const src = [
