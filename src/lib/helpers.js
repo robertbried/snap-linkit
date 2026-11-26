@@ -213,7 +213,6 @@
     return "Snap Linkit couldn't start this selection; drag again.";
   }
 
-  // ---- Test builds only: one diagnostic console line per drag (brief 4) ----
   // Why a drag's protection (brief 3's anchor) was off. One list, shared with
   // the code that decides it, so later briefs reuse the same names.
   // "off:<reason>": no anchor. "on:<reason>" (brief 5b): the pressed element
@@ -225,6 +224,9 @@
     noElement: 'no-element',          // no element under the pointer (unreachable from real input; the smoke harness takes it)
     threw: 'threw',                   // choosing the anchor threw (a drag from that press is cancelled: end=start-failed)
   });
+
+  // @test-only-begin (store builds leave out everything to the matching end: build.mjs stripTestOnly)
+  // ---- Test builds only: one diagnostic console line per drag (brief 4) ----
   // How a drag ended (start-failed: the anchor couldn't be chosen at the press, brief 5)
   const DRAG_ENDS = Object.freeze(['release', 'esc', 'page-changed', 'switched-off', 'replaced', 'start-failed']);
   const DRAG_ANCHOR_KINDS = Object.freeze(['label', 'link', 'element', 'none']);
@@ -296,6 +298,7 @@
     ['topSpeed', 'count'],
     ['carried', ['no', 'last-seen']],
   ].map(Object.freeze));
+  // @test-only-end
 
   // The pressed element is gone for good mid-drag (removed, or 0x0, and not
   // found again uniquely). What happens to the drag (ultrareview 1, #1):
@@ -720,6 +723,7 @@
       : `Stopped: Snap Linkit couldn't open its confirm dialog. ${nothing}`;
   }
 
+  // @test-only-begin
   // Lab builds only (build.mjs --faults): does the fault list spec, e.g.
   // "report,progress@3", name this point? "name" always matches; "name@N"
   // only when n === N. Anything that is not a non-empty string matches nothing.
@@ -731,6 +735,7 @@
       return at === undefined || (at !== '' && Number(at) === n);
     });
   }
+  // @test-only-end
 
   // Characters the downloads API rejects in a filename: backslash, slash,
   // colon, star, question mark, quote, angle brackets, pipe, and the ASCII
@@ -849,11 +854,11 @@
     dragPageChangedMessage,
     dragStartFailedMessage,
     DRAG_OFF_REASONS,
-    DRAG_ENDS,
-    dragDiagName,
-    dragDiagPx,
-    dragDiagLine,
-    DRAG_EXTRAS,
+    DRAG_ENDS, // @test-only
+    dragDiagName, // @test-only
+    dragDiagPx, // @test-only
+    dragDiagLine, // @test-only
+    DRAG_EXTRAS, // @test-only
     anchorLostOutcome,
     releaseAfterCarryOn,
     dragFollowNeeded,
@@ -893,7 +898,7 @@
     ordinaryUnreadMessage,
     carefulFallbackMessage,
     carefulNotStartedMessage,
-    faultMatches,
+    faultMatches, // @test-only
     filenameFromUrl,
     WHATS_NEW_VERSION,
     WHATS_NEW_SHORTCUTS,

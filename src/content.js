@@ -9,7 +9,8 @@
   // Pure helpers live in lib/helpers.js (loaded first by the manifest)
   const {
     isOpenableUrl, matchesPattern, rectsIntersect, rectFromPoints, dragStartPoint,
-    uniqueMatch, firstUsableAnchor, dragPageChangedMessage, dragStartFailedMessage, DRAG_OFF_REASONS, dragDiagLine, TRACKED_CHECKBOX_SELECTOR,
+    uniqueMatch, firstUsableAnchor, dragPageChangedMessage, dragStartFailedMessage, DRAG_OFF_REASONS, TRACKED_CHECKBOX_SELECTOR,
+    dragDiagLine, // @test-only
     dragFollowNeeded, trackingLock, fixedContainerAllows, anchorLostOutcome, releaseAfterCarryOn,
     autoScrollStep, autoScrollZone, autoScrollRate, autoScrollDelta, clampToArea, liveCountText,
     isDownloadableUrl, majorityShouldCheck, plural, fitMenuAxis, clampMenuAxis,
@@ -17,7 +18,8 @@
     TRACKED_TABLE_SELECTOR, isTrackedCheckbox, afterClickOutcome, ordinaryCheckboxMessage,
     selectableVerdict, labelMapFrom, touchesSelection, pageChangeMarksStale,
     carefulCheckboxMessage, carefulProgressMessage, carefulConfirmText,
-    ordinaryUnreadMessage, carefulFallbackMessage, carefulNotStartedMessage, faultMatches
+    ordinaryUnreadMessage, carefulFallbackMessage, carefulNotStartedMessage,
+    faultMatches, // @test-only
   } = globalThis.SnapLinkitLib;
 
   // ============================================
@@ -40,14 +42,17 @@
   const CHECKBOX_CONFIRM_ABOVE = 30;      // PROVISIONAL: ask first when more boxes than this need saving
   const CHECKBOX_SAVE_ESTIMATE_MS = 300;  // PROVISIONAL: assumed time of one save, used only for the confirm's estimate
   const SAVING_CLASS = 'is-saving';       // Fandom's class while a box is saving
+  // @test-only-begin (store builds leave out everything to the matching end, and every
+  // line marked "@test-only": build.mjs stripTestOnly; item 4, big run 2)
   // Test-build console lines: one per Fandom checkbox save (Rob's measurement)
   // and one per drag (brief 4's diagnostics). Test build only:
   // `node build.mjs --test` switches it on in the packaged copy; src/ keeps it off.
   const SAVE_LOG = false;
   // Failure injection for the brief 2b lab tests. Lab builds only:
-  // `node build.mjs --faults` switches it on in the packaged copy; src/, the
-  // store zips and Rob's test zips keep it off, so faultActive() is always false.
+  // `node build.mjs --faults` switches it on in the packaged copy; src/ and
+  // Rob's test zips keep it off; store zips don't contain it at all.
   const FAULTS = false;
+  // @test-only-end
 
   // ============================================
   // STATE
@@ -291,7 +296,7 @@
       fallback
     );
     if (a) state.lastSeen = { x: start.x + scroll.x, y: start.y + scroll.y };
-    if (SAVE_LOG && dragDiag) dragDiag.lastStartPageY = start.y + scroll.y; // test builds: the drag line's gap
+    if (SAVE_LOG && dragDiag) dragDiag.lastStartPageY = start.y + scroll.y; // @test-only: test builds: the drag line's gap
     // A2: the pointer end stays inside the visible window (nothing unseen is selected)
     return rectFromPoints(start, clampToArea({ x: state.currentX, y: state.currentY }, visibleArea()));
   }
@@ -461,7 +466,7 @@
   function pickDragAnchor(e) {
     const hit = pressedElement(e);
     if (!hit || typeof hit.closest !== 'function') return diagPick(null, DRAG_OFF_REASONS.noElement, hit, e);
-    faultPoint('anchor'); // lab builds: choosing the anchor throws (the drag line's "off:threw")
+    faultPoint('anchor'); // @test-only: lab builds: choosing the anchor throws (the drag line's "off:threw")
     const pressed = mapToAnchorElement(hit);
     const reason = inFixedOrSticky(pressed) ? DRAG_OFF_REASONS.fixedOrSticky
       : !anchorBox(pressed) ? DRAG_OFF_REASONS.noBox : null;
@@ -531,7 +536,7 @@
   function fixedRuleAllows(el) {
     const box = nearestFixed(el);
     const ok = fixedContainerAllows({ inFixed: Boolean(box), pressedInside: Boolean(box) && isElementNode(state.pressEl) && isInsideComposed(box, state.pressEl) });
-    if (!ok && SAVE_LOG && dragDiag) dragDiag.fixedOut.add(el);
+    if (!ok && SAVE_LOG && dragDiag) dragDiag.fixedOut.add(el); // @test-only
     return ok;
   }
 
@@ -564,7 +569,7 @@
     const found = refindAnchor(a.key, a.root);
     if (found) {
       a.el = found;
-      if (SAVE_LOG && dragDiag) dragDiag.refinds++;
+      if (SAVE_LOG && dragDiag) dragDiag.refinds++; // @test-only
       return true;
     }
     // Gone for good. A drag locked to tracking boxes is cancelled (it could
@@ -573,15 +578,16 @@
     if (anchorLostOutcome({ trackLock: state.trackLock }) === 'carry-on') {
       state.anchor = null;
       state.carried = true;
-      if (SAVE_LOG && dragDiag) dragDiag.carried = true;
+      if (SAVE_LOG && dragDiag) dragDiag.carried = true; // @test-only
       return true;
     }
-    if (SAVE_LOG && dragDiag) dragDiag.refindCancelled = true;
+    if (SAVE_LOG && dragDiag) dragDiag.refindCancelled = true; // @test-only
     cancelSelection('page-changed');
     showToastOrLog(dragPageChangedMessage(), { sticky: true });
     return false;
   }
 
+  // @test-only-begin
   // ---- Test builds only (SAVE_LOG): one diagnostic console line per drag (brief 4) ----
   // A record is made at the press, filled in as the drag goes and written once
   // when a drag that passed the 5 px threshold ends (release, Esc, page changed,
@@ -647,6 +653,7 @@
       diagFailed(error);
     }
   }
+  // @test-only-end
 
   // pickDragAnchor's result, passed through unchanged. In test builds the drag
   // record notes which return it was: "on", "on:<reason>" (an anchor found under
@@ -654,6 +661,7 @@
   // "off:<reason>". `pressed` names the element pressed; moved and gap are
   // measured on the anchor (without one, on the element pressed).
   function diagPick(anchor, reason, pressed, e) {
+    // @test-only-begin
     if (SAVE_LOG && dragDiag) {
       try {
         const rec = dragDiag;
@@ -671,9 +679,11 @@
         diagFailed(error);
       }
     }
+    // @test-only-end
     return anchor;
   }
 
+  // @test-only-begin
   function diagUpdated(t0) {
     dragDiag.updates++;
     dragDiag.slowest = Math.max(dragDiag.slowest, performance.now() - t0);
@@ -733,6 +743,7 @@
       diagFailed(error);
     }
   }
+  // @test-only-end
 
   function getUniqueUrls() {
     const urls = new Set();
@@ -1145,8 +1156,9 @@
   function showConfirmDialog(text, onConfirm, onCancel) {
     // One confirm at a time: a second request while it shows (e.g. the
     // shortcut pressed again) is ignored, so Open All cannot run twice.
-    if (confirmShowing() || faultActive('confirmBusy')) return false;
-    faultPoint('confirm');
+    if (confirmShowing()) return false;
+    if (faultActive('confirmBusy')) return false; // @test-only: lab builds
+    faultPoint('confirm'); // @test-only
     // The menu acts on the same selection; close it so it cannot be clicked
     // while the confirm is up (it would otherwise sit above the backdrop).
     hideMenu();
@@ -1231,6 +1243,7 @@
     return document.body || document.documentElement;
   }
 
+  // @test-only-begin
   // Lab builds only (FAULTS): true when the page names this point in
   // <html data-snaplinkit-fault="...">, so the brief 2b tests can make a step
   // fail on purpose. Always false in every other build.
@@ -1243,6 +1256,7 @@
   function faultPoint(name, n) {
     if (faultActive(name, n)) throw new Error(`Snap Linkit: injected fault "${name}"`);
   }
+  // @test-only-end
 
   // showToast for results that must not be lost: if the message cannot be
   // shown at all, it goes to the console with its details. Never throws.
@@ -1477,7 +1491,7 @@
       if (isChecked(el) === target) c.n++;
       else c.refused++;
     }
-    faultPoint('ordinary'); // lab builds: the result cannot be read, after the boxes were clicked
+    faultPoint('ordinary'); // @test-only: lab builds: the result cannot be read, after the boxes were clicked
     return c;
   }
 
@@ -1491,7 +1505,7 @@
   let carefulRun = null; // { stop, ignoredDrag, i, k } while a run is going
 
   function showCarefulProgress(run) {
-    faultPoint('progress', run.i); // lab builds: a fault inside the run, before item i is clicked
+    faultPoint('progress', run.i); // @test-only: lab builds: a fault inside the run, before item i is clicked
     showToast(carefulProgressMessage(run.i, run.k, run.ignoredDrag), { sticky: true });
   }
 
@@ -1523,10 +1537,12 @@
     });
   }
 
+  // @test-only-begin
   function logSave(i, k, status, t0) {
     if (!SAVE_LOG) return;
     console.log(`[Snap Linkit] save ${i}/${k} ${status} ${Math.round(performance.now() - t0)} ms`);
   }
+  // @test-only-end
 
   // queue: the tracked boxes that need changing, in page order.
   // pre: { m, already, disabled } counted at release. Resolves to the counts
@@ -1553,13 +1569,13 @@
 
         run.i = i;
         showCarefulProgress(run);
-        const t0 = performance.now();
+        const t0 = performance.now(); // @test-only
         try {
           el.click();
           clickedAt = i;
         } catch (error) {
           console.warn('[Snap Linkit] Could not toggle element:', el, error);
-          logSave(i, k, 'failed (click threw)', t0);
+          logSave(i, k, 'failed (click threw)', t0); // @test-only
           stopAt('failed', i);
           break;
         }
@@ -1568,30 +1584,30 @@
           checked: isChecked(el), target, saving: el.classList.contains(SAVING_CLASS)
         });
         if (outcome !== 'saving') {
-          logSave(i, k, outcome, t0);
+          logSave(i, k, outcome, t0); // @test-only
           stopAt(outcome === 'refused' ? (clicks === 1 ? 'refusedFirst' : 'refusedLater')
             : outcome === 'unconfirmed' ? 'unconfirmed' : 'failed', i);
           break;
         }
         const wait = await waitForSave(el, CHECKBOX_SAVE_TIMEOUT_MS);
         if (wait === 'timeout') {
-          logSave(i, k, 'timeout', t0);
+          logSave(i, k, 'timeout', t0); // @test-only
           stopAt(el.isConnected ? 'timeout' : 'tableChanged', i);
           break;
         }
         if (isChecked(el) !== target) {
-          logSave(i, k, 'failed', t0);
+          logSave(i, k, 'failed', t0); // @test-only
           stopAt('failed', i);
           break;
         }
         if (isDisabled(el)) {
-          logSave(i, k, 'unconfirmed (still disabled)', t0);
+          logSave(i, k, 'unconfirmed (still disabled)', t0); // @test-only
           stopAt('unconfirmed', i);
           break;
         }
         c.n++;
         processed = i;
-        logSave(i, k, 'ok', t0);
+        logSave(i, k, 'ok', t0); // @test-only
         if (i < k) await sleep(CHECKBOX_SAVE_GAP_MS);
       }
     } catch (error) {
@@ -1655,7 +1671,7 @@
     const start = () => {
       const progress = { stage: 'before', c: null };
       return (async () => {
-        faultPoint('beforeRun'); // lab builds: a fault before the run (as if clearSelection threw)
+        faultPoint('beforeRun'); // @test-only: lab builds: a fault before the run (as if clearSelection threw)
         clearSelection();
         progress.stage = 'running';
         progress.c = await runCarefulSaves(queue, target, pre);
@@ -1664,7 +1680,7 @@
         // (never rejects), so the careful result shows whatever happens to it.
         const ord = ordinaryDone ? await ordinaryResult(ordinaryDone) : null;
         const lead = ord ? `${ord.text}. ` : '';
-        faultPoint('report'); // lab builds: showing the final message fails
+        faultPoint('report'); // @test-only: lab builds: showing the final message fails
         // Every message but plain success stays until dismissed (so does one
         // whose ordinary part could not be read)
         showToast(lead + carefulCheckboxMessage(progress.c),
@@ -1731,7 +1747,7 @@
     const lead = ordinaryDone ? `${(await ordinaryResult(ordinaryDone)).text}. ` : '';
     const text = lead + carefulFallbackMessage(progress.stage, progress.c, k);
     try {
-      faultPoint('fallback'); // lab builds: even the fallback message fails
+      faultPoint('fallback'); // @test-only: lab builds: even the fallback message fails
       showToast(text, { sticky: true });
     } catch (error) {
       try { dismissStickyToast(); } catch (_) { /* nowhere left to show anything */ }
@@ -1775,7 +1791,7 @@
   // ============================================
 
   function updateSelection() {
-    const t0 = SAVE_LOG ? performance.now() : 0;
+    const t0 = SAVE_LOG ? performance.now() : 0; // @test-only
     if (!dragCache) startDragCache(); // started at the 5 px threshold; on demand otherwise
     if (dragCache.stale) {
       if (dragCache.list) dragCache.rebuilds++;
@@ -1790,7 +1806,7 @@
       applySelection();
     } finally {
       proxyCache = null;
-      if (SAVE_LOG && dragDiag) diagUpdated(t0); // test builds: the drag line's updates and slowest
+      if (SAVE_LOG && dragDiag) diagUpdated(t0); // @test-only: test builds: the drag line's updates and slowest
     }
   }
 
@@ -1885,7 +1901,7 @@
   // Abort any in-progress drag, drop the selection and close the menu
   // `end` says why, for the test-build drag line: esc, page-changed, switched-off or start-failed
   function cancelSelection(end) {
-    if (SAVE_LOG && dragDiag && dragDiag.started) diagWrite(end);
+    if (SAVE_LOG && dragDiag && dragDiag.started) diagWrite(end); // @test-only
     endDragCache();
     state.isSelecting = false;
     state.isDragging = false;
@@ -1956,7 +1972,7 @@
     f.timer = null;
     if (!state.isDragging) return;
     if (!dragFollowNeeded(f.last, { x: window.scrollX, y: window.scrollY }, f.inner)) return;
-    if (SAVE_LOG && dragDiag) dragDiag.follows++;
+    if (SAVE_LOG && dragDiag) dragDiag.follows++; // @test-only
     dragUpdate();
   }
 
@@ -1967,7 +1983,7 @@
     if (!f || !state.isDragging) return;
     cancelDragFollowFrame(f);
     if (!dragFollowNeeded(f.last, { x: window.scrollX, y: window.scrollY }, f.inner)) return;
-    if (SAVE_LOG && dragDiag) dragDiag.follows++;
+    if (SAVE_LOG && dragDiag) dragDiag.follows++; // @test-only
     dragUpdate();
   }
 
@@ -2025,14 +2041,16 @@
 
       if (sx.px !== 0 || sy.px !== 0) {
         window.scrollBy(autoScrollStep(sx.px, sy.px)); // instant, even where the page asks for smooth scrolling (brief 7b)
-        if (SAVE_LOG && dragDiag) dragDiag.topSpeed = Math.max(dragDiag.topSpeed, Math.round(Math.max(Math.abs(rx), Math.abs(ry))));
+        if (SAVE_LOG && dragDiag) dragDiag.topSpeed = Math.max(dragDiag.topSpeed, Math.round(Math.max(Math.abs(rx), Math.abs(ry)))); // @test-only
         // NO mutation of state.startX/startY - getSelectionRect() follows the
         // pressed element (or the scroll delta when there is no anchor)
         if (!refreshDragAnchor()) return;
-        if (SAVE_LOG && dragDiag) diagScrollUpdate();
+        if (SAVE_LOG && dragDiag) diagScrollUpdate(); // @test-only
         updateLassoAndSelection();
+      // @test-only-begin
       } else if (!rx && !ry && SAVE_LOG && dragDiag) {
         dragDiag.lastScrollUpdate = null; // the pointer left the edge zone: the next stretch starts fresh
+      // @test-only-end
       }
     }, FRAME_INTERVAL);
   }
@@ -2076,7 +2094,7 @@
     // started, so a failure can't leave a half-started drag (brief 5). A
     // failure is reported in the console and marks the press: if it becomes a
     // drag, onMouseMove cancels it and says so; a plain right-click stays one.
-    if (SAVE_LOG) diagPress(e); // test builds: the drag line's record ("off:threw" until pickDragAnchor returns)
+    if (SAVE_LOG) diagPress(e); // @test-only: test builds: the drag line's record ("off:threw" until pickDragAnchor returns)
     endDragCache(); // a press with no release in between ends the previous drag's cache (after its line)
     stopDragFollow(); // ... and its scroll listener (A1)
     let anchor = null;
@@ -2090,7 +2108,7 @@
     } catch (error) {
       pressFailed = true;
       console.error(`[Snap Linkit] Could not start the selection: ${error && error.message ? error.message : String(error)}`, error);
-      diagPick(null, DRAG_OFF_REASONS.threw, null, e); // test builds: the drag line's "off:threw"
+      diagPick(null, DRAG_OFF_REASONS.threw, null, e); // @test-only: test builds: the drag line's "off:threw"
     }
 
     // Track potential drag start - don't activate until MIN_DRAG_DISTANCE.
@@ -2136,7 +2154,7 @@
 
       // Threshold reached - NOW activate selection mode
       state.isDragging = true;
-      if (SAVE_LOG && dragDiag) dragDiag.started = true; // test builds: this drag gets a line
+      if (SAVE_LOG && dragDiag) dragDiag.started = true; // @test-only: test builds: this drag gets a line
       state.blockNextContextMenu = true; // Block context menu since we're dragging
 
       // The anchor couldn't be chosen at the press (brief 5): cancel the drag
@@ -2201,7 +2219,7 @@
         return;
       }
     }
-    if (SAVE_LOG && wasDragging && dragDiag && dragDiag.started) diagWrite('release');
+    if (SAVE_LOG && wasDragging && dragDiag && dragDiag.started) diagWrite('release'); // @test-only
     endDragCache();
     state.isSelecting = false;
     state.isDragging = false;

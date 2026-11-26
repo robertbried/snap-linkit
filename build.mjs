@@ -19,12 +19,14 @@
  * browser_specific_settings, minimum_chrome_version, Chrome 128 px icon), sw.js, images/icon128-chrome.png and
  * privacy-policy.html (the Chrome wording of the policy; src/privacy-policy.html is the Firefox one).
  * Zips are deterministic (sorted entries, fixed timestamps), so the same files always give the same bytes.
- * No dependencies: node:fs, node:path, node:zlib, node:crypto only.
+ * Store builds leave out the test-only code (stripTestOnly, below); test and lab builds keep it.
+ * No dependencies: node:fs, node:path, node:zlib, node:crypto, node:vm only.
  */
 import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
 import crypto from 'node:crypto';
+import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
@@ -104,15 +106,61 @@ function switchOn(text, off, on, what) {
   return text.replace(off, on);
 }
 
+// Store builds leave out the test-only code (item 4, big run 2): the per-save and per-drag console lines (SAVE_LOG)
+// and the lab's failure injection (FAULTS). In src/, a line marked "// @test-only" is test-only, and so is every line
+// from "// @test-only-begin" to "// @test-only-end" (both included). Test and lab builds keep every line and only
+// switch SAVE_LOG / FAULTS on. After stripping, no test-only name may be left and the script must still parse.
+const TEST_ONLY_LINE = /\/\/ @test-only(?=$|[\s:])/;
+const TEST_ONLY_BEGIN = /^\s*\/\/ @test-only-begin(?=$|\s)/;
+const TEST_ONLY_END = /^\s*\/\/ @test-only-end(?=$|\s)/;
+export const TEST_ONLY_NAMES = /\b(SAVE_LOG|FAULTS|faultActive|faultPoint|faultMatches|dragDiag\w*|diagWrite|diagPress|diagPlace|diagUpdated|diagScrollUpdate|diagFailed|logSave|DRAG_ENDS|DRAG_EXTRAS)\b|@test-only/;
+
+export function stripTestOnly(text, what = 'script') {
+  const out = [];
+  let open = 0;
+  let removed = 0;
+  text.split('\n').forEach((line, i) => {
+    if (TEST_ONLY_BEGIN.test(line)) {
+      if (open) throw new Error(`build: ${what}:${i + 1}: @test-only-begin inside another (opened at line ${open})`);
+      open = i + 1;
+      removed++;
+      return;
+    }
+    if (TEST_ONLY_END.test(line)) {
+      if (!open) throw new Error(`build: ${what}:${i + 1}: @test-only-end without a begin`);
+      open = 0;
+      removed++;
+      return;
+    }
+    if (open || TEST_ONLY_LINE.test(line)) {
+      removed++;
+      return;
+    }
+    out.push(line);
+  });
+  if (open) throw new Error(`build: ${what}:${open}: @test-only-begin is never closed`);
+  const result = out.join('\n');
+  const left = TEST_ONLY_NAMES.exec(result);
+  if (left) throw new Error(`build: ${what}: test-only code left after stripping ("${left[0]}")`);
+  try {
+    new vm.Script(result, { filename: what });
+  } catch (error) {
+    throw new Error(`build: ${what} doesn't parse after stripping: ${error.message}`);
+  }
+  return { text: result, removed };
+}
+
 /**
  * Build one target into <outDir>/<target>/ and <outDir>/snap_linkit-<target>-<version><suffix>.zip.
  * Options:
- *   {}                (default) the store build, no suffix: content.js exactly as in src/;
+ *   {}                (default) the store build, no suffix: src/ with the test-only code left out of every script
+ *                     (stripTestOnly);
  *   { test: true }    a test build, suffix -test: SAVE_LOG on (one diagnostic console line per save and per drag);
  *   { test: true, faults: true }
  *                     a lab build, suffix -lab: the test build with failure injection on (FAULTS). `faults`
  *                     without `test` throws.
- * Returns { target, dir, zip, version, files, sha256 }. Throws on any problem (a failed build may leave a
+ * Returns { target, dir, zip, version, files, sha256, stripped } (stripped: lines left out per script, store builds
+ * only). Throws on any problem (a failed build may leave a
  * partial <outDir>/<target>/; the next build deletes and rebuilds it).
  */
 export function buildTarget(target, outDir = path.join(ROOT, 'dist'), { test = false, faults = false } = {}) {
@@ -133,16 +181,24 @@ export function buildTarget(target, outDir = path.join(ROOT, 'dist'), { test = f
     fs.mkdirSync(path.dirname(path.join(dir, f)), { recursive: true });
     fs.copyFileSync(from.get(f), path.join(dir, f));
   }
+  const stripped = {};
   if (test) {
     const cs = path.join(dir, 'content.js');
     let text = switchOn(fs.readFileSync(cs, 'utf8'), SAVE_LOG_OFF, SAVE_LOG_ON, 'a test build');
     if (faults) text = switchOn(text, FAULTS_OFF, FAULTS_ON, 'a fault-injection build');
     fs.writeFileSync(cs, text);
+  } else {
+    for (const f of files.filter((name) => name.endsWith('.js'))) {
+      const file = path.join(dir, f);
+      const r = stripTestOnly(fs.readFileSync(file, 'utf8'), `${target}/${f}`);
+      if (r.removed > 0) fs.writeFileSync(file, r.text);
+      stripped[f] = r.removed;
+    }
   }
   const zip = path.join(outDir, `snap_linkit-${target}-${version}${faults ? '-lab' : test ? '-test' : ''}.zip`);
   writeZip(zip, dir, files);
   const sha256 = crypto.createHash('sha256').update(fs.readFileSync(zip)).digest('hex');
-  return { target, dir, zip, version, files, sha256 };
+  return { target, dir, zip, version, files, sha256, stripped };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
